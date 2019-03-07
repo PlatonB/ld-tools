@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 import urllib.request, re, os, json, gzip, sys, dbm
 
@@ -57,7 +57,7 @@ def process_intgen_data(intgen_dir_path):
         #Поскольку это - процесс долгий, то пользователю
         #будет показано соответствующее предупреждение.
         if os.listdir(intgen_dir_path) == []:
-                print('''Для рассчёта LD необходимы данные 1000 Genomes.
+                print('''\nДля рассчёта LD необходимы данные 1000 Genomes.
 Их загрузка и оптимизация могут занять сутки.''')
                 
         #Захардкодим URL того каталога FTP IGSR,
@@ -193,29 +193,30 @@ def process_intgen_data(intgen_dir_path):
                                 #Построчное прочтение основной части VCF-таблицы.
                                 for line in intgen_natgz_opened:
                                         
-                                        #Получение refSNPID.
-                                        rs_cell = line.split('\t')[2]
+                                        #Создание списка из идентификатора SNP,
+                                        #референсного и альтернативного(-ых) аллеля(-ей).
+                                        part_row = line.split('\t')[2:5]
+                                        
+                                        #Получение из этого списка
+                                        #идентификатора SNP и одного или
+                                        #более альтернативных аллелей.
+                                        rs_cell, alt_cell = part_row[0], part_row[2]
                                         
                                         #Вместо refSNPID могут попадаться
                                         #другие типы идентификаторов.
-                                        #Текущая версия LD-бэкенда отправляет в базы
-                                        #только те строки, которые включают refSNPID.
-                                        #refSNPID становятся ключами, а содержащие
-                                        #их строки (в сжатом виде) - значениями.
-                                        #Сначала производится проверка на
-                                        #наличие в строке одиночного refSNPID.
-                                        #Если одиночный не попался, то ищутся
-                                        #множественные, разделённые точкой с запятой.
-                                        #Множественные обрабатываются так:
-                                        #все refSNPID группы назначаются ключами,
-                                        #каждому из них присваивается одна и та
-                                        #же строка, соответствующая группе.
-                                        if re.match(r'rs\d+$', rs_cell) != None:
+                                        #Текущая версия LD-бэкенда
+                                        #отправляет в базы только те
+                                        #строки, которые включают refSNPID.
+                                        #refSNPID становятся ключами,
+                                        #а содержащие их строки (в
+                                        #сжатом виде) - значениями.
+                                        #Мультиаллельные SNP пока не
+                                        #поддерживаются калькулятором LD,
+                                        #поэтому соответствующие refSNPID
+                                        #в базу добавляться не будут.
+                                        if re.match(r'rs\d+$', rs_cell) != None and alt_cell.find(',') == -1:
                                                 intgen_natdb_opened[rs_cell] = compress_line(line)
-                                        elif re.match(r'rs\d+(?:;rs\d+)+$', rs_cell) != None:
-                                                for rs_id in rs_cell.split(';'):
-                                                        intgen_natdb_opened[rs_id] = compress_line(line)
-                                                        
+                                                
         return intgen_sampjson_path, intgen_natgz_paths, intgen_natdb_paths
 
 #intgen_sampjson_path, intgen_natgz_paths, intgen_natdb_paths = process_intgen_data('/home/platon/_0_Диссертация/Exp/1000G/data')
