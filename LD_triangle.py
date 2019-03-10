@@ -1,11 +1,11 @@
-__version__ = 'V3.1'
+__version__ = 'V3.2'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.1.
+Версия: V3.2.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), 'backend'))
 from prepare_intgen_data import process_intgen_data
 from retrieve_sample_indices import retrieve_sample_indices
 from ld_calc import ld_calc
-import plotly as py, plotly.figure_factory as ff
+import plotly as py, plotly.graph_objs as go, plotly.figure_factory as ff
 
 src_dir_path = input('\nПуть к папке с исходными файлами: ')
 trg_top_dir_path = input('\nПуть к папке для конечных файлов: ')
@@ -330,7 +330,7 @@ for src_file_name in src_file_names:
                                                 ld_vals = ld_calc(rows_by_chrs[chr_num][row_index],
                                                                   rows_by_chrs[chr_num][col_index],
                                                                   sample_indices)
-                                                if 'ld_value_thres' in locals():
+                                                if 'thres_ld_measure' in locals():
                                                         if ld_vals[thres_ld_measure] < ld_value_thres:
                                                                 continue
                                                 ld_two_dim[row_index][col_index] = round(ld_vals[ld_measure], 5)
@@ -361,55 +361,71 @@ for src_file_name in src_file_names:
                         if 'color_map' in locals():
                                 
                                 print(f'{src_file_name}: хромосома {chr_num}: визуализация LD-матрицы...')
-                                
-                                #Создание объекта диаграммы с помощью Plotly.
-                                #Он представляет собой структуру со свойствами
-                                #словаря, в которую вложены структуры со свойствами
-                                #словарей и списков, содержащие параметры тепловой карты.
-                                #С помощью аргументов функции create_annotated_heatmap
-                                #можно менять настройки диаграммы, находящиеся
-                                #в значении ключа верхнего уровня 'data'.
-                                #Аргумент этой функции, который имеет возможность
-                                #выбрать пользователь - цветовая схема тепловой карты.
-                                #Не изменяемые в рамках интерактивного диалога аргументы:
-                                #массивы с LD-данными и лейблами по X, Y, наличие
-                                #разделительных линий между квадратиками, а также более
-                                #тёмная заливка квадратиков при больших значениях в них.
-                                ld_heatmap = ff.create_annotated_heatmap(ld_two_dim,
-                                                                         x=rs_ids_srtd,
-                                                                         y=rs_ids_srtd,
-                                                                         xgap=1,
-                                                                         ygap=1,
-                                                                         colorscale=color_map,
-                                                                         reversescale=True)
-                                
-                                #В аннотированных тепловых картах Plotly
-                                #ось Y по умолчанию направлена снизу вверх.
-                                #Чтобы ориентация тепловых карт, создаваемых
-                                #этой программой, была такая же, как в
-                                #LDMatrix, переворачиваем диаграмму по Y.
-                                #Параметры осей заложены в структуры,
-                                #принадлежащие ключу верхнего уровня 'layout'.
-                                ld_heatmap['layout']['yaxis']['autorange'] = 'reversed'
-                                
-                                #Эта программа может опционально размещать
-                                #значения LD в квадратиках тепловой карты,
-                                #а также наносить лейблы на оси X и Y.
+
+                                #Plotly позволяет строить тепловые карты
+                                #как без надписей, так и с таковыми.
+                                #Под надписями подразумеваются значения LD в
+                                #квадратиках тепловой карты и лейблы осей X, Y.
                                 #Допустим, пользователь предпочёл не выводить
                                 #на диаграмму никаких текстовых данных.
-                                #Тогда, чтобы не вписывать ничего в квадратики, нужно
-                                #сделать пустым списком значение ключа 'annotations',
-                                #содержащего все настройки надписей для квадратиков,
-                                #а в настройки осей, находящиеся в глубинах
-                                #'layout', следует добавить ключ 'showticklabels'
-                                #со значением, запрещающим вывод лейблов.
+                                #Тогда нужно будет создать обычную,
+                                #не аннотированную, тепловую карту
+                                #и подавить размещение лейблов осей.
+                                #Для построения объекта тепловой карты,
+                                #в квадратиках которой не будет текста,
+                                #программа использует функцию Heatmap.
+                                #Функция принимает посчитанные LD, отобранные
+                                #refSNPID, заданную пользователем цветовую
+                                #схему и ряд константных аргументов:
+                                #наличие расстояния между квадратиками,
+                                #потемнение клеточек по мере увеличения
+                                #значений и отсутствие цветовой шкалы.
+                                #Объект дополняется словарём с настройками
+                                #осей: для начала - запретом вывода лейблов.
                                 if texts == 'no' or texts == 'n' or texts == '':
-                                        ld_heatmap['layout']['annotations'] = []
-                                        ld_heatmap['layout']['xaxis']['showticklabels'] = False
-                                        ld_heatmap['layout']['yaxis']['showticklabels'] = False
+                                        trace = go.Heatmap(z=ld_two_dim,
+                                                           x=rs_ids_srtd,
+                                                           y=rs_ids_srtd,
+                                                           xgap=1,
+                                                           ygap=1,
+                                                           colorscale=color_map,
+                                                           reversescale=True,
+                                                           showscale=False)
+                                        layout = {'xaxis': {'showticklabels': False},
+                                                  'yaxis': {'showticklabels': False}}
+                                        ld_heatmap = {'data': [trace],
+                                                      'layout': layout}
                                         
                                 #Пользователь дал добро выводить на диаграмму надписи.
                                 else:
+
+                                        #Для создания тепловых карт со значениями
+                                        #в квадратиках (аннотированных) Plotly предоставляет
+                                        #высокоуровневую функцию create_annotated_heatmap.
+                                        #Объект аннотированной тепловой карты представляет
+                                        #собой структуру со свойствами словаря, в которую
+                                        #вложены структуры со свойствами словарей и
+                                        #списков, содержащие параметры диаграммы.
+                                        #С помощью аргументов create_annotated_heatmap
+                                        #можно менять настройки диаграммы, находящиеся
+                                        #в значении ключа верхнего уровня 'data'.
+                                        #Самые основные аргументы этой функции -
+                                        #массивы с LD-данными и лейблами по X, Y.
+                                        #Аргумент, который определяется на этапе интерактивного
+                                        #диалога пользователем - цветовая схема тепловой карты.
+                                        #Не изменяемые в рамках диалога аргументы: наличие
+                                        #разделительных линий между квадратиками, более тёмная
+                                        #заливка квадратиков при больших значениях в них.
+                                        #В create_annotated_heatmap по умолчанию
+                                        #не допускается вывод цветовой шкалы.
+                                        #Так и оставим ради экономии пространства.
+                                        ld_heatmap = ff.create_annotated_heatmap(ld_two_dim,
+                                                                                 x=rs_ids_srtd,
+                                                                                 y=rs_ids_srtd,
+                                                                                 xgap=1,
+                                                                                 ygap=1,
+                                                                                 colorscale=color_map,
+                                                                                 reversescale=True)
                                         
                                         #Пользователь кастомизировал размер шрифта значений внутри квадратиков.
                                         #Тогда в каждый подсловарь структуры 'annotations' будет
@@ -418,12 +434,21 @@ for src_file_name in src_file_names:
                                                 for ann_num in range(len(ld_heatmap['layout']['annotations'])):
                                                         ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = int(val_font_size)
                                                         
-                                        #По желанию, пользователь может задать недефолтное
+                                        #При желании, пользователь мог задать недефолтное
                                         #значение параметра размера шрифта лейблов осей.
                                         if lab_font_size != 'default':
                                                 ld_heatmap['layout']['xaxis']['tickfont'] = {'size': int(lab_font_size)}
                                                 ld_heatmap['layout']['yaxis']['tickfont'] = {'size': int(lab_font_size)}
-                                        
+                                                
+                                #В тепловых картах Plotly, обычных и аннотированных,
+                                #ось Y по умолчанию направлена снизу вверх.
+                                #Чтобы ориентация тепловых карт, создаваемых
+                                #этой программой, была такая же, как в
+                                #LDMatrix, переворачиваем диаграмму по Y.
+                                #Параметры осей заложены в структуры,
+                                #принадлежащие ключу верхнего уровня 'layout'.
+                                ld_heatmap['layout']['yaxis']['autorange'] = 'reversed'
+                                
                                 #Построение диаграммы и её сохранение в HTML.
                                 html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_LD_diag.html'
                                 py.offline.plot(ld_heatmap, filename = html_file_path, auto_open=False)
