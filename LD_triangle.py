@@ -1,11 +1,11 @@
-__version__ = 'V3.3'
+__version__ = 'V3.4'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.3.
+Версия: V3.4.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -375,15 +375,19 @@ y.rsID: {rs_ids_srtd[row_index]}
                                 print(f'{src_file_name}: хромосома {chr_num}: сохранение текстовой LD-матрицы...')
                                 
                                 #Создание текстового конечного файла.
-                                #Прописываем в него шапку, а потом строки,
-                                #добавляя к каждой из них соответствующий refSNPID.
+                                #Прописываем в него 2 шапки, а
+                                #потом LD-строки, добавляя перед
+                                #каждой из них refSNPID и позицию.
                                 tsv_file_name = f'{src_file_base}_chr{chr_num}_LD_tab.tsv'
                                 with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
-                                        tsv_file_opened.write('\t' + '\t'.join(rs_ids_srtd) + '\n')
+                                        tsv_file_opened.write('\t' * 2 + '\t'.join(rs_ids_srtd) + '\n')
+                                        tsv_file_opened.write(f'\tchr{chr_num}\t' + '\t'.join(poss_srtd) + '\n')
                                         rs_id_index = 0
                                         for row in ld_two_dim:
                                                 line = '\t'.join([str(cell) for cell in row]) + '\n'
-                                                tsv_file_opened.write(rs_ids_srtd[rs_id_index] + '\t' + line)
+                                                tsv_file_opened.write(rs_ids_srtd[rs_id_index] + '\t' +
+                                                                      poss_srtd[rs_id_index] + '\t' +
+                                                                      line)
                                                 rs_id_index += 1
                                                 
                         #Если переменная, ссылающаяся на значение, которое
@@ -406,7 +410,8 @@ y.rsID: {rs_ids_srtd[row_index]}
                                 #Для построения объекта тепловой карты,
                                 #в квадратиках которой не будет текста,
                                 #программа использует функцию Heatmap.
-                                #Функция принимает посчитанные LD, отобранные
+                                #Функция принимает посчитанные LD и другую
+                                #информацию по парам SNPs, отобранные
                                 #refSNPID, заданную пользователем цветовую
                                 #схему и ряд константных аргументов:
                                 #наличие расстояния между квадратиками,
@@ -432,7 +437,7 @@ y.rsID: {rs_ids_srtd[row_index]}
                                         
                                 #Пользователь дал добро выводить на диаграмму надписи.
                                 else:
-
+                                        
                                         #Для создания тепловых карт со значениями
                                         #в квадратиках (аннотированных) Plotly предоставляет
                                         #высокоуровневую функцию create_annotated_heatmap.
@@ -444,7 +449,8 @@ y.rsID: {rs_ids_srtd[row_index]}
                                         #можно менять настройки диаграммы, находящиеся
                                         #в значении ключа верхнего уровня 'data'.
                                         #Самые основные аргументы этой функции -
-                                        #массивы с LD-данными и лейблами по X, Y.
+                                        #массивы с LD-данными, дополнительной информацией
+                                        #по каждой паре SNPs и лейблами по X, Y.
                                         #Аргумент, который определяется на этапе интерактивного
                                         #диалога пользователем - цветовая схема тепловой карты.
                                         #Не изменяемые в рамках диалога аргументы: наличие
