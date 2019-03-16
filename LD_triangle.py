@@ -1,11 +1,11 @@
-__version__ = 'V3.2'
+__version__ = 'V3.3'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.2.
+Версия: V3.3.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -35,7 +35,7 @@ def check_input(var):
 
 print('\nИмпорт модулей программы...')
 
-import sys, random, os, re, gzip, dbm, shutil
+import sys, random, os, re, gzip, dbm, copy, shutil
 sys.path.insert(0, os.path.join(os.getcwd(), 'backend'))
 from prepare_intgen_data import process_intgen_data
 from retrieve_sample_indices import retrieve_sample_indices
@@ -285,54 +285,86 @@ for src_file_name in src_file_names:
                         #Сортировка двумерного массива текущей хромосомы по позициям SNPs.
                         rows_by_chrs[chr_num].sort(key=lambda row: int(row[1]))
                         
-                        #Получение отсортированного по позиции списка refSNPID.
+                        #Получение списков отсортированных позиций и
+                        #идущих в соответствующем порядке refSNPIDs.
+                        poss_srtd = [row[1] for row in rows_by_chrs[chr_num]]
                         rs_ids_srtd = [row[2] for row in rows_by_chrs[chr_num]]
                         
                         print(f'\n{src_file_name}: хромосома {chr_num}: формирование LD-матрицы...')
                         
-                        ##Создание двумерного массива такой структуры:
+                        ##Создание двумерных массивов такой структуры:
                         '''
-                          0        0      0
-                        LDval      0      0
-                        LDval    LDval    0
+                         0      0     0
+                        val     0     0
+                        val    val    0
                         '''
                         
                         #Построение шаблона двумерного массива
                         #размером n x n, состоящего из нулей.
-                        #Нули в дальнейшем будут заменяться на значения LD.
+                        #Нули в дальнейшем могут заменяться на значения LD.
                         ld_two_dim = [[0 for cell_index in range(rows_in_chr_amount)] for row_index in range(rows_in_chr_amount)]
+
+                        #В случае, если будет строиться диаграмма,
+                        #такой же шаблон понадобится для создания
+                        #матрицы сопутствующей информации.
+                        if 'color_map' in locals():
+                                info_two_dim = copy.deepcopy(ld_two_dim)
                         
                         #Перебор чисел, которые будут представлять
-                        #собой индексы строк двумерного массива.
+                        #собой индексы строк двумерных массивов.
                         for row_index in range(rows_in_chr_amount):
                                 
                                 #Перебор чисел, которые будут служить
-                                #индексами столбцов двумерного массива.
+                                #индексами столбцов двумерных массивов.
                                 for col_index in range(rows_in_chr_amount):
                                         
-                                        #Матрица значений может представлять собой квадрат, состоящий
-                                        #из двух одинаковых по форме и содержимому прямоугольных
-                                        #треугольника, разделённых диагональю 0-ячеек.
+                                        #Матрица, в принципе, может быть квадратом,
+                                        #состоящим из двух одинаковых по форме и содержимому
+                                        #прямоугольных треугольников, разделённых диагональю 0-ячеек.
                                         #Думаю, разумнее оставить лишь один из этих треугольников.
-                                        #Получаем только те LD-значения, которые соответствуют
-                                        #квадратикам, индекс строки которых больше индекса столбца.
+                                        #Получаем только те значения, которые соответствуют
+                                        #ячейкам, индекс строки которых больше индекса столбца.
                                         if row_index > col_index:
                                                 
                                                 #Обращение к оффлайн-калькулятору для
                                                 #получения словаря с r2 и D' текущей пары SNP.
-                                                #0-ячейка будет заменена на найденное значение
-                                                #LD выбранной величины, либо останется нулевой.
-                                                #Ноль сохранится, если пара находится в полном
-                                                #равновесии по сцеплению, либо если LD этой
-                                                #пары ниже заданного пользователем порога.
-                                                #Значение LD округляется до 5 знаков.
-                                                #Если это вам кажется неразумным, пишите в Issues.
                                                 ld_vals = ld_calc(rows_by_chrs[chr_num][row_index],
                                                                   rows_by_chrs[chr_num][col_index],
                                                                   sample_indices)
+                                                
+                                                #Для диаграммы каждое значение LD аннотируется:
+                                                #параллельно с накоплением массива LD-значений растёт
+                                                #массив дополнительной информации по каждой паре SNP.
+                                                if 'info_two_dim' in locals():
+                                                        info_two_dim[row_index][col_index] = f'''
+r2: {round(ld_vals['r_square'], 5)},
+D': {round(ld_vals['d_prime'], 5)},
+chr: {chr_num},
+x.pos: {poss_srtd[col_index]},
+y.pos: {poss_srtd[row_index]},
+x.rsID: {rs_ids_srtd[col_index]},
+y.rsID: {rs_ids_srtd[row_index]}
+'''
+                                                
+                                                #Пользователь мог установить нижний порог LD.
+                                                #Соответствующий блок кода неспроста расположен после
+                                                #блока накопления аннотаций: на диаграммах клеточки с
+                                                #подпороговыми LD будут закрашены как нулевые, но
+                                                #зато при наведении курсора там отобразятся настоящие
+                                                #LD-значения, как раз извлекаемые из массива с аннотациями.
+                                                #При обратном расположении этих блоков аннотации подпороговых
+                                                #LD не сохранялись бы, ведь в блоке фильтрации - continue.
                                                 if 'thres_ld_measure' in locals():
                                                         if ld_vals[thres_ld_measure] < ld_value_thres:
                                                                 continue
+                                                        
+                                                #Если значение LD не отсеилось как
+                                                #подпороговое, то попадёт в LD-матрицу:
+                                                #0-ячейка будет заменена на найденное
+                                                #значение LD выбранной величины.
+                                                #Оно округляется до 5 знаков.
+                                                #Если такой уровень точности вам
+                                                #кажется неразумным, пишите в Issues.
                                                 ld_two_dim[row_index][col_index] = round(ld_vals[ld_measure], 5)
                                                 
                         ##Сохранение результатов.
@@ -361,7 +393,7 @@ for src_file_name in src_file_names:
                         if 'color_map' in locals():
                                 
                                 print(f'{src_file_name}: хромосома {chr_num}: визуализация LD-матрицы...')
-
+                                
                                 #Plotly позволяет строить тепловые карты
                                 #как без надписей, так и с таковыми.
                                 #Под надписями подразумеваются значения LD в
@@ -386,6 +418,8 @@ for src_file_name in src_file_names:
                                         trace = go.Heatmap(z=ld_two_dim,
                                                            x=rs_ids_srtd,
                                                            y=rs_ids_srtd,
+                                                           hovertext = info_two_dim,
+                                                           hoverinfo = 'text',
                                                            xgap=1,
                                                            ygap=1,
                                                            colorscale=color_map,
@@ -422,6 +456,8 @@ for src_file_name in src_file_names:
                                         ld_heatmap = ff.create_annotated_heatmap(ld_two_dim,
                                                                                  x=rs_ids_srtd,
                                                                                  y=rs_ids_srtd,
+                                                                                 hovertext = info_two_dim,
+                                                                                 hoverinfo = 'text',
                                                                                  xgap=1,
                                                                                  ygap=1,
                                                                                  colorscale=color_map,
