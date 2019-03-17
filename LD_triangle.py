@@ -1,11 +1,11 @@
-__version__ = 'V3.4'
+__version__ = 'V3.5'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.4.
+Версия: V3.5.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -337,13 +337,15 @@ for src_file_name in src_file_names:
                                                 #массив дополнительной информации по каждой паре SNP.
                                                 if 'info_two_dim' in locals():
                                                         info_two_dim[row_index][col_index] = f'''
-r2: {round(ld_vals['r_square'], 5)},
-D': {round(ld_vals['d_prime'], 5)},
+r2: {ld_vals['r_square']},
+D': {ld_vals['d_prime']} ▓
 chr: {chr_num},
 x.pos: {poss_srtd[col_index]},
-y.pos: {poss_srtd[row_index]},
+y.pos: {poss_srtd[row_index]} ▓
 x.rsID: {rs_ids_srtd[col_index]},
-y.rsID: {rs_ids_srtd[row_index]}
+y.rsID: {rs_ids_srtd[row_index]} ▓
+pop: {' '.join(populations)},
+gend: {' '.join(genders)}
 '''
                                                 
                                                 #Пользователь мог установить нижний порог LD.
@@ -362,10 +364,7 @@ y.rsID: {rs_ids_srtd[row_index]}
                                                 #подпороговое, то попадёт в LD-матрицу:
                                                 #0-ячейка будет заменена на найденное
                                                 #значение LD выбранной величины.
-                                                #Оно округляется до 5 знаков.
-                                                #Если такой уровень точности вам
-                                                #кажется неразумным, пишите в Issues.
-                                                ld_two_dim[row_index][col_index] = round(ld_vals[ld_measure], 5)
+                                                ld_two_dim[row_index][col_index] = ld_vals[ld_measure]
                                                 
                         ##Сохранение результатов.
                         
