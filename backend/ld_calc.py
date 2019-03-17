@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 import os, json
 
@@ -77,10 +77,10 @@ def ld_calc(snp_1_row, snp_2_row, sample_indices):
         #D' - нормализованное значение LD.
         if d > 0:
                 d_max = min(p1 * q2, p2 * q1)
-                d_prime = d / d_max
+                d_prime = round(d / d_max, 5)
         elif d < 0:
                 d_min = max(-p1 * q1, -p2 * q2)
-                d_prime = d / d_min
+                d_prime = round(d / d_min, 5)
         else:
                 d_prime = 0
                 
@@ -89,7 +89,7 @@ def ld_calc(snp_1_row, snp_2_row, sample_indices):
         #Если r2 = 0, то это полное равновесие по сцеплению,
         #если r2 = 1, то тогда полное неравновесие.
         if d_prime != 0:
-                r_square = (d ** 2) / (p1 * p2 * q1 * q2)
+                r_square = round((d ** 2) / (p1 * p2 * q1 * q2), 5)
         else:
                 r_square = 0
 
