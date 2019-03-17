@@ -1,11 +1,11 @@
-__version__ = 'V3.5'
+__version__ = 'V3.6'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.5.
+Версия: V3.6.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -49,12 +49,13 @@ intgen_dir_path = input('\nПуть к папке для данных 1000 Genom
 output = input('''\nВ каком виде выводить матрицы значений
 неравновесия по сцеплению (далее - LD-матрицы)?
 (игнорирование ввода ==> в обоих)
-[table|heatmap|both(|<enter>)]: ''')
-if output != 'table' and output != 'heatmap' and output != 'both' and output != '':
+[table(|t)|heatmap(|h)|both(|<enter>)]: ''')
+if output != 'table' and output != 't' and output != 'heatmap' \
+   and output != 'h' and output != 'both' and output != '':
         print(f'{output} - недопустимая опция')
         sys.exit()
         
-elif output == 'heatmap' or output == 'both' or output == '':
+elif output == 'heatmap' or output == 'h' or output == 'both' or output == '':
         texts = input('''\nВыводить на диаграмму текстовую информацию?
 (не рекомендуется, если строите матрицу > ~50x50 элементов; в любом
 случае данные будут появляться по наведению курсора на квадратик)
@@ -81,8 +82,9 @@ elif output == 'heatmap' or output == 'both' or output == '':
                         
         color_map = input('''\nЦветовая палитра тепловой карты
 (https://github.com/plotly/plotly.py/blob/bdafae81e747dfc11ea7c6c64fa9d09117aa1816/plotly/colors.py#L90)
+(в любом регистре)
 (игнорирование ввода ==> зелёные оттенки)
-[Greens(|<enter>)|Hot|Earth|Electric|...]: ''')
+[Greens(|<enter>)|Hot|Earth|Electric|...]: ''').capitalize()
         if color_map == '':
                 color_map = 'Greens'
                 
@@ -97,16 +99,21 @@ else:
         
 populations = input('''\nВ пределах какой(-их) супер-/субпопуляции(-ий) считать LD?
 (http://www.internationalgenome.org/faq/which-populations-are-part-your-study/)
+(в любом регистре)
 (несколько - через пробел)
 (игнорирование ввода ==> всех)
-[ALL(|<enter>)|EUR|JPT|AMR YRI|...]: ''').split()
+[ALL(|<enter>)|EUR|JPT|JPT AMR YRI|...]: ''').upper().split()
 if populations == []:
         populations = ['ALL']
         
 genders = input('''\nСреди индивидов какого пола считать LD?
 (игнорирование ввода ==> обоих)
-[male|female|both(|<enter>)]: ''').split()
-if genders == [] or genders == ['both']:
+[male(|m)|female(|f)|both(|<enter>)]: ''').split()
+if genders == ['m']:
+        genders = ['male']
+elif genders == ['f']:
+        genders = ['female']
+elif genders == [] or genders == ['both']:
         genders = ['male', 'female']
 elif genders != ['male'] and genders != ['female']:
         print(f'{genders[0]} - недопустимая опция')
@@ -369,7 +376,7 @@ gend: {' '.join(genders)}
                         ##Сохранение результатов.
                         
                         #Пользователь указал создавать текстовые версии LD-матриц.
-                        if output == 'table' or output == 'both' or output == '':
+                        if output == 'table' or output == 't' or output == 'both' or output == '':
                                 
                                 print(f'{src_file_name}: хромосома {chr_num}: сохранение текстовой LD-матрицы...')
                                 
