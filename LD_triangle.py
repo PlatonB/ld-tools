@@ -1,17 +1,17 @@
-__version__ = 'V3.6'
+__version__ = 'V3.7'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.6.
+Версия: V3.7.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
-Обязательно! Установка библиотеки визуализации:
-sudo pip install plotly
+Обязательно! Установка модулей:
+sudo pip3 install plotly numpy
 
 Поддерживаемые исходные файлы - таблицы, содержащие столбец с набором refSNPIDs.
 Если таких столбцов - несколько, программа будет использовать самый левый.
@@ -35,7 +35,20 @@ def check_input(var):
 
 print('\nИмпорт модулей программы...')
 
-import sys, random, os, re, gzip, dbm, copy, shutil
+import sys
+
+#Раньше при нескольких подряд
+#запусках этой программы можно было
+#наблюдать, по меньшей мере, 2 бага.
+#1. Чаще: новая диаграмма рисовалась
+#тех же цветов, что и предыдущая.
+#2. Реже, но с разрушительными последствиями:
+#выдавались неправильные значения LD.
+#Всё это лечится подавлением
+#формирования питоновского кэша.
+sys.dont_write_bytecode = True
+
+import random, os, re, gzip, dbm, copy
 sys.path.insert(0, os.path.join(os.getcwd(), 'backend'))
 from prepare_intgen_data import process_intgen_data
 from retrieve_sample_indices import retrieve_sample_indices
@@ -344,15 +357,15 @@ for src_file_name in src_file_names:
                                                 #массив дополнительной информации по каждой паре SNP.
                                                 if 'info_two_dim' in locals():
                                                         info_two_dim[row_index][col_index] = f'''
-r2: {ld_vals['r_square']},
-D': {ld_vals['d_prime']} ▓
+r2: {ld_vals["r_square"]},
+D': {ld_vals["d_prime"]} ▓
 chr: {chr_num},
 x.pos: {poss_srtd[col_index]},
 y.pos: {poss_srtd[row_index]} ▓
 x.rsID: {rs_ids_srtd[col_index]},
 y.rsID: {rs_ids_srtd[row_index]} ▓
-pop: {' '.join(populations)},
-gend: {' '.join(genders)}
+pop: {" ".join(populations)},
+gend: {" ".join(genders)}
 '''
                                                 
                                                 #Пользователь мог установить нижний порог LD.
@@ -381,13 +394,19 @@ gend: {' '.join(genders)}
                                 print(f'{src_file_name}: хромосома {chr_num}: сохранение текстовой LD-матрицы...')
                                 
                                 #Создание текстового конечного файла.
-                                #Прописываем в него 2 шапки, а
-                                #потом LD-строки, добавляя перед
-                                #каждой из них refSNPID и позицию.
+                                #Прописываем в него хэдер с общими
+                                #характеристиками таблицы, пустую
+                                #строку и две шапки: одна - с
+                                #refSNPIDs, другая - с позициями.
+                                #Потом прописываем LD-строки,
+                                #добавляя перед каждой из
+                                #них тоже refSNPID и позицию.
                                 tsv_file_name = f'{src_file_base}_chr{chr_num}_LD_tab.tsv'
                                 with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
-                                        tsv_file_opened.write('\t' * 2 + '\t'.join(rs_ids_srtd) + '\n')
-                                        tsv_file_opened.write(f'\tchr{chr_num}\t' + '\t'.join(poss_srtd) + '\n')
+                                        tab = '\t'
+                                        tsv_file_opened.write(f'#General\tinfo:\tchr{chr_num}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
+                                        tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
+                                        tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
                                         rs_id_index = 0
                                         for row in ld_two_dim:
                                                 line = '\t'.join([str(cell) for cell in row]) + '\n'
@@ -417,9 +436,8 @@ gend: {' '.join(genders)}
                                 #в квадратиках которой не будет текста,
                                 #программа использует функцию Heatmap.
                                 #Функция принимает посчитанные LD и другую
-                                #информацию по парам SNPs, отобранные
-                                #refSNPID, заданную пользователем цветовую
-                                #схему и ряд константных аргументов:
+                                #информацию по парам SNPs, заданную пользователем
+                                #цветовую схему и ряд константных аргументов:
                                 #наличие расстояния между квадратиками,
                                 #потемнение клеточек по мере увеличения
                                 #значений и отсутствие цветовой шкалы.
@@ -427,8 +445,6 @@ gend: {' '.join(genders)}
                                 #осей: для начала - запретом вывода лейблов.
                                 if texts == 'no' or texts == 'n' or texts == '':
                                         trace = go.Heatmap(z=ld_two_dim,
-                                                           x=rs_ids_srtd,
-                                                           y=rs_ids_srtd,
                                                            hovertext = info_two_dim,
                                                            hoverinfo = 'text',
                                                            xgap=1,
@@ -454,9 +470,9 @@ gend: {' '.join(genders)}
                                         #С помощью аргументов create_annotated_heatmap
                                         #можно менять настройки диаграммы, находящиеся
                                         #в значении ключа верхнего уровня 'data'.
-                                        #Самые основные аргументы этой функции -
-                                        #массивы с LD-данными, дополнительной информацией
-                                        #по каждой паре SNPs и лейблами по X, Y.
+                                        #Самые основные аргументы этой функции - массивы
+                                        #с LD-данными, refSNPIDs в качестве лейблов по X, Y
+                                        #и дополнительной информацией по каждой паре SNPs.
                                         #Аргумент, который определяется на этапе интерактивного
                                         #диалога пользователем - цветовая схема тепловой карты.
                                         #Не изменяемые в рамках диалога аргументы: наличие
@@ -500,10 +516,3 @@ gend: {' '.join(genders)}
                                 #Построение диаграммы и её сохранение в HTML.
                                 html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_LD_diag.html'
                                 py.offline.plot(ld_heatmap, filename = html_file_path, auto_open=False)
-                                
-#Если задать для первой тепловой карты одну цветовую
-#схему, а для второй - другую, то наблюдается баг:
-#вторая диаграмма рисуется тех же цветов, что и первая.
-#Лечится ежеразовым удалением питоновского кэша,
-#образующегося при каждом запуске программы.
-shutil.rmtree(os.path.join(os.getcwd(), 'backend', '__pycache__'))
