@@ -75,7 +75,7 @@ def process_intgen_data(intgen_dir_path):
         
         #Если сохранённой панели нет, скачиваем её.
         #Получаем путь к панели и название.
-        print('\n')
+        print('')
         intgen_samptxt_path, intgen_samptxt_base = download_intgen_data(intgen_ftp_url, intgen_samptxt_name, intgen_dir_path, -1)
         
         #Собираем имя будущей JSON-редакции панели и путь к ней.
