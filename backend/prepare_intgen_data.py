@@ -1,4 +1,4 @@
-__version__ = 'V1.1'
+__version__ = 'V1.2'
 
 import urllib.request, re, os, json, gzip, sys, dbm
 
@@ -24,7 +24,7 @@ def download_intgen_data(intgen_ftp_url, intgen_data_name, intgen_dir_path, inde
         #уже есть на диске, функция вернёт
         #путь к нему, а также его название.
         if os.path.exists(intgen_data_path) == False:
-                print(f'\n{intgen_data_name} не найден. Загрузка...')
+                print(f'{intgen_data_name} не найден. Загрузка...')
                 try:
                         urllib.request.urlretrieve(intgen_data_url, intgen_data_path)
                         return intgen_data_path, intgen_data_base
@@ -32,7 +32,7 @@ def download_intgen_data(intgen_ftp_url, intgen_data_name, intgen_dir_path, inde
                         print('Сбой соединения. Повторная попытка:')
                         return download_intgen_data(intgen_ftp_url, intgen_data_name, intgen_dir_path, index)
         else:
-                print(f'\n{intgen_data_name} уже скачан')
+                print(f'{intgen_data_name} уже скачан')
                 return intgen_data_path, intgen_data_base
         
 '''
@@ -75,6 +75,7 @@ def process_intgen_data(intgen_dir_path):
         
         #Если сохранённой панели нет, скачиваем её.
         #Получаем путь к панели и название.
+        print('\n')
         intgen_samptxt_path, intgen_samptxt_base = download_intgen_data(intgen_ftp_url, intgen_samptxt_name, intgen_dir_path, -1)
         
         #Собираем имя будущей JSON-редакции панели и путь к ней.
@@ -83,9 +84,9 @@ def process_intgen_data(intgen_dir_path):
         
         #JSON-панель создастся только, если она ещё не создана.
         if os.path.exists(intgen_sampjson_path) == True:
-                print(f'{intgen_sampjson_name} уже создан')
+                print(f'{intgen_sampjson_name} уже создан\n')
         else:
-                print(f'{intgen_sampjson_name} не найден. Создание...')
+                print(f'{intgen_sampjson_name} не найден. Создание...\n')
                 
                 #Открытие исходной (txt) версии панели на чтение.
                 with open(intgen_samptxt_path) as intgen_samptxt_opened:
@@ -138,6 +139,13 @@ def process_intgen_data(intgen_dir_path):
         #dbm-базы, основанные на данных из 1000 Genomes-VCFs.
         for intgen_natgz_name in intgen_natgz_names:
                 
+                #Проверка на наличие табикс-индексов.
+                #Если их нет - они скачаются.
+                #Сохранять возвращаемые функцией
+                #пути к tbi-файлам не нужно, т.к.
+                #pysam находит индексы самостоятельно.
+                download_intgen_data(intgen_ftp_url, intgen_natgz_name + '.tbi', intgen_dir_path, -3)
+                
                 #При обнаружении отсутствия архива 1000
                 #Genomes вызываемая функция скачает его, а
                 #также возвратит путь к архиву и его название.
@@ -154,17 +162,17 @@ def process_intgen_data(intgen_dir_path):
                 #Проверка, нет ли у пользователя уже готовой базы.
                 #Если есть, то пропускаем процесс создания.
                 if os.path.exists(intgen_natdb_path) == True:
-                        print(f'{intgen_natdb_name} уже создан')
+                        print(f'{intgen_natdb_name} уже создан\n')
                         continue
-                print(f'{intgen_natdb_name} не найден. Создание...')
+                print(f'{intgen_natdb_name} не найден. Создание...\n')
                 
                 #Открываем архив 1000 Genomes на чтение таким образом, чтобы 
                 #находящийся внутри VCF считывался как строковые данные.
                 with gzip.open(intgen_natgz_path, mode='rt') as intgen_natgz_opened:
-
+                        
                         #Создание dbm-базы.
                         with dbm.open(intgen_natdb_path, 'c') as intgen_natdb_opened:
-
+                                
                                 #Прочтение вхолостую строк метаинформации.
                                 #Получение шапки VCF-таблицы.
                                 meta_line = intgen_natgz_opened.readline()
