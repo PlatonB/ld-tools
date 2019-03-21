@@ -1,11 +1,11 @@
-__version__ = 'V3.7'
+__version__ = 'V3.8'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.7.
+Версия: V3.8.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -162,21 +162,27 @@ elif ld_measure != 'r_square' and ld_measure != 'd_prime':
         print(f'{ld_measure} - недопустимая опция')
         sys.exit()
         
-#Вызов функции, которая скачает заархивированные VCF и панель сэмплов проекта
-#1000 Genomes, если они ещё не скачаны, а также разместит строки изо всех VCF
-#в единую dbm-базу и вернёт абсолютные пути ко всем скачанным и созданным файлам.
-#Эта dbm-база данных (далее - база) будет состоять из ключей -
-#refSNPID всех хромосом, и значений - сжатых строк упомянутых VCF.
-intgen_sampjson_path, intgen_natgz_paths, intgen_natdb_paths = process_intgen_data(intgen_dir_path)
+#Вызов функции, которая скачает заархивированные
+#VCF и панель сэмплов проекта 1000 Genomes,
+#если они ещё не скачаны, а также разместит
+#строки изо всех VCF в похромосомные dbm-базы.
+#Каждая dbm-база данных (далее - база) будет
+#состоять из ключей - refSNPID определённой хромосомы,
+#и значений - сжатых строк упомянутых VCF.
+#Функция не только скачивает данные, но и
+#возвращает абсолютные пути: без расширений -
+#к vcf.gz-архивам (они же - к dbm-базам),
+#а с расширением - к панели сэмплов.
+intgen_sampjson_path, intgen_vcfbase_paths = process_intgen_data(intgen_dir_path)
 
-#Удаление путей к 1000 Genomes-архивам, т.к. у нас уже
-#есть база, из которой легко извлечь refSNP-содержащие строки,
-#а исходные архивы именно в этой программе более не пригодятся.
-del intgen_natgz_paths
-
-#Вызов функции, производящей отбор сэмплов, относящихся к указанным
-#пользователем популяциям и полам, и возвращающей индексы этих сэмплов.
-sample_indices = retrieve_sample_indices(intgen_sampjson_path, populations, genders, random.choice(intgen_natdb_paths))
+#Вызов функции, производящей отбор
+#сэмплов, относящихся к указанным
+#пользователем популяциям и полам,
+#и возвращающей индексы этих сэмплов.
+sample_indices = retrieve_sample_indices(intgen_sampjson_path,
+                                         populations,
+                                         genders,
+                                         random.choice(intgen_vcfbase_paths) + '.dbm')
 
 ##Работа с исходными файлами, создание конечных папок.
 
@@ -217,7 +223,7 @@ for src_file_name in src_file_names:
                         #Добавление идентификатора во множество.
                         rs_ids.add(rs_id)
                         
-                #Проверка, есть ли пользовательском наборе хотя бы 2 refSNPID.
+                #Проверка, есть ли в пользовательском наборе хотя бы 2 refSNPID.
                 if len(rs_ids) < 2:
                         print(f'{src_file_name} содержит менее двух refSNPIDs. Будет проигнорирован')
                         continue
@@ -232,11 +238,14 @@ for src_file_name in src_file_names:
                 #Перебор избавленных от повторов пользовательских refSNPID.
                 for rs_id in rs_ids:
                         
-                        #Перебор баз с целью найти refSNPID-содержащую строку.
-                        for intgen_natdb_path in intgen_natdb_paths:
+                        #Перебор путей к 1000 Genomes-файлам без расширений.
+                        for intgen_vcfbase_path in intgen_vcfbase_paths:
                                 
+                                #К этим путям добавляется
+                                #расширение dbm, чтобы можно
+                                #было обращаться к базам.
                                 #Открытие каждой базы на чтение.
-                                with dbm.open(intgen_natdb_path) as intgen_natdb_opened:
+                                with dbm.open(intgen_vcfbase_path + '.dbm') as intgen_natdb_opened:
                                         
                                         #Попытка извлечения из очередной базы сжатой строки,
                                         #соответствующей текущему пользовательскому refSNPID.
