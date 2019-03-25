@@ -1,8 +1,8 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 import json, dbm, gzip, sys
 
-def retrieve_sample_indices(intgen_sampjson_path, populations, genders, any_intgen_natdb_path):
+def retrieve_sample_indices(intgen_sampjson_path, populations, genders, any_intgen_vcfdb_path):
         '''
         Получение сэмплов, соответствующих заданным популяциям и полам.
         '''
@@ -18,8 +18,8 @@ def retrieve_sample_indices(intgen_sampjson_path, populations, genders, any_intg
         #на чтение и достаём из таблицы шапку.
         #Разархивируем её, конвертируем
         #в Юникод и преобразуем в список.
-        with dbm.open(any_intgen_natdb_path) as any_intgen_natdb_opened:
-                header_row = gzip.decompress(any_intgen_natdb_opened['header_line']).decode('utf-8').split('\t')
+        with dbm.open(any_intgen_vcfdb_path) as any_intgen_vcfdb_opened:
+                header_row = gzip.decompress(any_intgen_vcfdb_opened['header_line']).decode('utf-8').split('\t')
                 
         #Пользователь может по ошибке указать популяцию дважды или
         #выбрать суперпопуляцию и принадлежащую ей субпопуляцию вместе.
