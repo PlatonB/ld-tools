@@ -1,11 +1,11 @@
-__version__ = 'V3.8'
+__version__ = 'V3.9'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V3.8.
+Версия: V3.9.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -56,7 +56,9 @@ from ld_calc import ld_calc
 import plotly as py, plotly.graph_objs as go, plotly.figure_factory as ff
 
 src_dir_path = input('\nПуть к папке с исходными файлами: ')
+
 trg_top_dir_path = input('\nПуть к папке для конечных файлов: ')
+
 intgen_dir_path = input('\nПуть к папке для данных 1000 Genomes: ')
 
 output = input('''\nВ каком виде выводить матрицы значений
@@ -245,7 +247,7 @@ for src_file_name in src_file_names:
                                 #расширение dbm, чтобы можно
                                 #было обращаться к базам.
                                 #Открытие каждой базы на чтение.
-                                with dbm.open(intgen_vcfbase_path + '.dbm') as intgen_natdb_opened:
+                                with dbm.open(intgen_vcfbase_path + '.dbm') as intgen_vcfdb_opened:
                                         
                                         #Попытка извлечения из очередной базы сжатой строки,
                                         #соответствующей текущему пользовательскому refSNPID.
@@ -255,7 +257,7 @@ for src_file_name in src_file_names:
                                         #В результате разархивации None выйдет пустая байтовая строка.
                                         #После её конвертаций, упомянутых выше, сформируется список
                                         #с обычной пустой строкой в качестве единственного элемента.
-                                        row = gzip.decompress(intgen_natdb_opened.get(rs_id)).decode('utf-8').split('\t')
+                                        row = gzip.decompress(intgen_vcfdb_opened.get(rs_id)).decode('utf-8').split('\t')
                                         
                                         #Если содержимое списка получилось
                                         #иное, нежели пустая строка, значит
