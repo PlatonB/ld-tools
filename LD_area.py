@@ -1,0 +1,303 @@
+__version__ = 'V4.0'
+
+print('''
+Программа ищет в пределах фланков SNPs,
+обладающие надпороговым значением неравновесия
+по сцеплению с каждым запрашиваемым SNP.
+
+Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
+Версия: V4.0.
+Лицензия: GNU General Public License version 3.
+Поддержать проект: https://money.yandex.ru/to/41001832285976
+Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
+
+Обязательно! Установка модуля:
+sudo pip3 install pysam
+
+Поддерживаемые исходные файлы - таблицы,
+содержащие столбец с набором refSNPIDs.
+Если таких столбцов - несколько,
+программа будет использовать самый левый.
+
+Если настройки, запрашиваемые в рамках интерактивного
+диалога, вам непонятны - пишите, пожалуйста, в Issues.
+''')
+
+def check_input(var):
+        '''
+        Проверка, правильно ли пользователь ответил на
+        запрос, требующий подтверждения или отрицания.
+        В случае ошибки работа программы завершится.
+        '''
+        if var != 'yes' and var != 'y' and var != 'no' \
+           and var != 'n' and var != '':
+                print(f'{var} - недопустимая опция')
+                sys.exit()
+                
+####################################################################################################
+
+print('\nИмпорт модулей программы...')
+
+import sys
+
+#Подавление формирования питоновского кэша с
+#целью предотвращения искажения результатов.
+sys.dont_write_bytecode = True
+
+import random, os, re, gzip, dbm, json
+sys.path.insert(0, os.path.join(os.getcwd(), 'backend'))
+from prepare_intgen_data import process_intgen_data
+from retrieve_sample_indices import retrieve_sample_indices
+from ld_calc import ld_calc
+from pysam import VariantFile
+
+src_dir_path = input('\nПуть к папке с исходными файлами: ')
+
+trg_top_dir_path = input('\nПуть к папке для конечных файлов: ')
+
+intgen_dir_path = input('\nПуть к папке для данных 1000 Genomes: ')
+
+num_of_headers = input('''\nКоличество не обрабатываемых строк
+в начале каждой исходной таблицы
+(игнорирование ввода ==> хэдеров/шапок в таблицах нет)
+[0(|<enter>)|1|2|...]: ''')
+if num_of_headers == '':
+        num_of_headers = 0
+else:
+        num_of_headers = int(num_of_headers)
+        
+populations = input('''\nДля индивидов какой(-их) супер-/субпопуляции(-ий) считать LD?
+(http://www.internationalgenome.org/faq/which-populations-are-part-your-study/)
+(в любом регистре)
+(несколько - через пробел)
+(игнорирование ввода ==> всех)
+[ALL(|<enter>)|EUR|JPT|JPT AMR YRI|...]: ''').upper().split()
+if populations == []:
+        populations = ['ALL']
+        
+genders = input('''\nДля индивидов какого пола считать LD?
+(игнорирование ввода ==> обоих)
+[male(|m)|female(|f)|both(|<enter>)]: ''').split()
+if genders == ['m']:
+        genders = ['male']
+elif genders == ['f']:
+        genders = ['female']
+elif genders == [] or genders == ['both']:
+        genders = ['male', 'female']
+elif genders != ['male'] and genders != ['female']:
+        print(f'{genders[0]} - недопустимая опция')
+        sys.exit()
+        
+flank_size = input('''\nРазмер каждого из фланков, в пределах
+которых надо искать сцепленные SNP
+(игнорирование ввода ==> 100000)
+[100000(|<enter>)|250000|...]: ''')
+if flank_size == '':
+        flank_size = 100000
+else:
+        flank_size = int(flank_size)
+        
+thres_ld_measure = input('''\nМера LD для выставления порога
+[r_square(|r)|d_prime(|d)]: ''')
+if thres_ld_measure == 'r':
+        thres_ld_measure = 'r_square'
+elif thres_ld_measure == 'd':
+        thres_ld_measure = 'd_prime'
+elif thres_ld_measure != 'r_square' and thres_ld_measure != 'd_prime':
+        print(f'{thres_ld_measure} - недопустимая опция')
+        sys.exit()
+        
+thres_ld_value = float(input(f'\n{thres_ld_measure} ≥ '))
+        
+#Вызов функции, которая скачает заархивированные
+#VCF и панель сэмплов проекта 1000 Genomes,
+#если они ещё не скачаны, а также разместит
+#строки изо всех VCF в похромосомные dbm-базы.
+#Каждая dbm-база данных (далее - база) будет
+#состоять из ключей - refSNPID определённой хромосомы,
+#и значений - сжатых строк упомянутых VCF.
+#Функция не только скачивает данные, но и
+#возвращает абсолютные пути: без расширений -
+#к vcf.gz-архивам (они же - к dbm-базам),
+#а с расширением - к панели сэмплов.
+intgen_sampjson_path, intgen_vcfbase_paths = process_intgen_data(intgen_dir_path)
+
+#Вызов функции, производящей отбор
+#сэмплов, относящихся к указанным
+#пользователем популяциям и полам,
+#и возвращающей индексы этих сэмплов.
+sample_indices = retrieve_sample_indices(intgen_sampjson_path,
+                                         populations,
+                                         genders,
+                                         random.choice(intgen_vcfbase_paths) + '.dbm')
+
+#Работа с исходными файлами.
+src_file_names = os.listdir(src_dir_path)
+for src_file_name in src_file_names:
+        src_file_base = '.'.join(src_file_name.split('.')[:-1])
+        
+        #Создание папки, в которую будут сохраняться
+        #результаты по текущему пользовательскому файлу.
+        trg_dir_path = os.path.join(trg_top_dir_path, f'{src_file_base}_lnkd')
+        os.mkdir(trg_dir_path)
+        
+        #Открытие файла пользователя на чтение.
+        with open(os.path.join(src_dir_path, src_file_name)) as src_file_opened:
+                
+                print(f'\n\n{src_file_name}')
+                
+                #Считываем строки-хэдеры, чтобы сместить
+                #курсор к началу основной части таблицы.
+                for header_index in range(num_of_headers):
+                        src_file_opened.readline()
+                        
+                #Построчное прочтение основной части исходной таблицы.
+                for line in src_file_opened:
+                        
+                        #Попытка получения refSNPID из текущей строки.
+                        try:
+                                query_rs_id = re.search(r'rs\d+', line).group()
+                        except AttributeError:
+                                continue
+                        
+                        print(f'\n{query_rs_id}...')
+                        
+                        #Список, в который будут помещаться,
+                        #как минимум, идентификаторы SNP,
+                        #сцепленных с запрашиваемым.
+                        #Туда также могут попадать
+                        #различные характеристики SNPs.
+                        #Содержимое списка будет зависить
+                        #от пресета, выбранного пользователем.
+                        linked_snps = []
+                        
+                        #Перебор путей к 1000 Genomes-файлам без расширений.
+                        for intgen_vcfbase_path in intgen_vcfbase_paths:
+                                
+                                #К этим путям добавляется
+                                #расширение dbm, чтобы можно
+                                #было обращаться к базам.
+                                #Открытие каждой базы на чтение.
+                                with dbm.open(intgen_vcfbase_path + '.dbm') as intgen_vcfdb_opened:
+                                        
+                                        #Попытка извлечения из очередной базы сжатой строки,
+                                        #соответствующей текущему пользовательскому refSNPID.
+                                        #Декомпрессия результата, превращение из
+                                        #байт-строки в обычную и преобразование в список.
+                                        #Если refSNPID в базе нет, то вместо сжатой строки вернётся None.
+                                        #В результате разархивации None выйдет пустая байтовая строка.
+                                        #После её конвертаций, упомянутых выше, сформируется список
+                                        #с обычной пустой строкой в качестве единственного элемента.
+                                        query_snp_row = gzip.decompress(intgen_vcfdb_opened.get(query_rs_id)).decode('utf-8').split('\t')
+                                        
+                                        #Если содержимое списка получилось
+                                        #иное, нежели пустая строка, значит
+                                        #refSNPID в одной из баз нашёлся.
+                                        #После работы с соответствующим
+                                        #SNP поиск будет прерван.
+                                        if query_snp_row != ['']:
+                                                
+                                                #Получение номера хромосомы и позиции запрашиваемого SNP.
+                                                chr_num, query_snp_pos = query_snp_row[0], int(query_snp_row[1])
+                                                
+                                                #Формирование имени конечного файла и пути к нему.
+                                                trg_file_name = f'{chr_num}_{query_rs_id}_{thres_ld_measure[0]}_{str(thres_ld_value)}.json'
+                                                trg_file_path = os.path.join(trg_dir_path, trg_file_name)
+                                                
+                                                #Если запрашиваемый SNP встретился
+                                                #повторно, то необходимо предотвратить
+                                                #поиск SNPs, с ним сцепленных.
+                                                if os.path.exists(trg_file_path) == True:
+                                                        print('\tуже был ранее обработан')
+                                                        break
+                                                
+                                                #Первый словарь конечного списка
+                                                #всегда будет содержать номер хромосомы,
+                                                #позицию и ID запрашиваемого SNP.
+                                                linked_snps.append({'chr': chr_num,
+                                                                    'queried.pos': query_snp_pos,
+                                                                    'queried.rsID': query_rs_id})
+                                                
+                                                #Открытие на чтение того из tabix-индексированных
+                                                #1000 Genomes-VCF, в котором точно есть запрашиваемый SNP.
+                                                #Pysam требует на вход лишь путь к vcf.gz-файлу,
+                                                #а tbi-сателлита обнаруживает самостоятельно.
+                                                #Из этого vcf.gz-файла будут вытаскиваться сцепленные SNPs.
+                                                with VariantFile(intgen_vcfbase_path + '.vcf.gz') as variant_file_obj:
+                                                        
+                                                        #Перебор объектов, соответствующих
+                                                        #заданному пользователем координатному
+                                                        #окну вокруг запрашиваемого SNP.
+                                                        #Каждый объект - это представленная
+                                                        #pysam'ом refSNPID-содержащая строка.
+                                                        #SNPs из описываемых объектов
+                                                        #будем называть кандидатными.
+                                                        for rec in variant_file_obj.fetch(chr_num,
+                                                                                          query_snp_pos - flank_size,
+                                                                                          query_snp_pos + flank_size):
+                                                                
+                                                                #Преобразование pysam-объекта
+                                                                #в строку, а её - в список.
+                                                                oppos_snp_row = str(rec).split('\n')[0].split('\t')
+                                                                
+                                                                #Получение из этого списка таких
+                                                                #важных элементов, как позиция,
+                                                                #идентификатор и альтернативный
+                                                                #аллель кандидатного SNP.
+                                                                oppos_snp_pos, oppos_rs_id, oppos_snp_alt = int(oppos_snp_row[1]), \
+                                                                                                            oppos_snp_row[2], \
+                                                                                                            oppos_snp_row[4]
+                                                                
+                                                                #Кандидатный SNP имеет шанс войти в конечный
+                                                                #список при соответствии нескольким критериям:
+                                                                #его идентификатор - refSNPID, он - не мультиаллельный
+                                                                #и не тот же самый, что и запрашиваемый.
+                                                                if re.match(r'rs\d+$', oppos_rs_id) != None \
+                                                                   and oppos_snp_alt.find(',') == -1 \
+                                                                   and oppos_rs_id != query_rs_id:
+                                                                        
+                                                                        #Вычисление LD.
+                                                                        ld_vals = ld_calc(query_snp_row,
+                                                                                          oppos_snp_row,
+                                                                                          sample_indices)
+                                                                        
+                                                                        #Отбор кандидатных SNP по
+                                                                        #пользовательскому порогу LD.
+                                                                        if ld_vals[thres_ld_measure] < thres_ld_value:
+                                                                                continue
+                                                                        
+                                                                        #Добавление в конечный список
+                                                                        #словаря с ID и позицией сцепленного
+                                                                        #SNP, а также со значениями LD.
+                                                                        linked_snps.append({'linked.pos': oppos_snp_pos,
+                                                                                            'linked.rsID': oppos_rs_id,
+                                                                                            "r2": ld_vals['r_square'],
+                                                                                            "D'": ld_vals['d_prime']})
+                                                                        
+                                                #Независимо от успешности поиска сцепленных
+                                                #SNPs, в конечный список попадает элемент
+                                                #с информацией о запрашиваемом SNP.
+                                                #Конечный файл будет создан только
+                                                #в том случае, если содержимое списка
+                                                #не ограничивается этим элементом.
+                                                if len(linked_snps) > 1:
+                                                        with open(trg_file_path, 'w') as trg_file_opened:
+                                                                
+                                                                #Полученный ранее список словарей пропишется
+                                                                #в JSON-файл с формированием отступов.
+                                                                json.dump(linked_snps, trg_file_opened, indent=4)
+                                                                
+                                                else:
+                                                        print(f'\t{thres_ld_measure} >= {thres_ld_value}: SNPs в LD не найдены')
+                                                        
+                                                break
+                                        
+                        #Если refSNPID из файла
+                        #пользователя не обнаружился
+                        #в базах, значит он - невалидный.
+                        #В конечный файл он допущен не будет.
+                        #Одна из вероятных причин - в том,
+                        #что именуемый им SNP - не биаллельный.
+                        else:
+                                print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
+                                continue
