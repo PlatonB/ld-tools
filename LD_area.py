@@ -1,4 +1,4 @@
-__version__ = 'V4.0'
+__version__ = 'V4.1'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.0.
+Версия: V4.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -136,10 +136,11 @@ src_file_names = os.listdir(src_dir_path)
 for src_file_name in src_file_names:
         src_file_base = '.'.join(src_file_name.split('.')[:-1])
         
-        #Создание папки, в которую будут сохраняться
-        #результаты по текущему пользовательскому файлу.
+        #Построение пути к папке для результатов
+        #по текущему пользовательскому файлу,
+        #которые, в свою очередь, должны будут
+        #распределяться по хромосомным подпапкам.
         trg_dir_path = os.path.join(trg_top_dir_path, f'{src_file_base}_lnkd')
-        os.mkdir(trg_dir_path)
         
         #Открытие файла пользователя на чтение.
         with open(os.path.join(src_dir_path, src_file_name)) as src_file_opened:
@@ -200,9 +201,20 @@ for src_file_name in src_file_names:
                                                 #Получение номера хромосомы и позиции запрашиваемого SNP.
                                                 chr_num, query_snp_pos = query_snp_row[0], int(query_snp_row[1])
                                                 
-                                                #Формирование имени конечного файла и пути к нему.
+                                                #Путь к хромосомной подпапке, имя
+                                                #конечного файла и путь к нему.
+                                                #Не факт, что соответствующие подпапка
+                                                #и файл будут далее реально созданы.
+                                                #Пути не пригодятся, если упомянутые
+                                                #объекты файловой системы появились в
+                                                #одной из прошлых итераций цикла.
+                                                #Если данных объектов ещё нет, но
+                                                #для текущего SNP не нашлось ни одного
+                                                #сцепленного, то в файловой системе
+                                                #также никаких изменений не произойдёт.
+                                                trg_chrdir_path = os.path.join(trg_dir_path, chr_num)
                                                 trg_file_name = f'{chr_num}_{query_rs_id}_{thres_ld_measure[0]}_{str(thres_ld_value)}.json'
-                                                trg_file_path = os.path.join(trg_dir_path, trg_file_name)
+                                                trg_file_path = os.path.join(trg_chrdir_path, trg_file_name)
                                                 
                                                 #Если запрашиваемый SNP встретился
                                                 #повторно, то необходимо предотвратить
@@ -210,13 +222,6 @@ for src_file_name in src_file_names:
                                                 if os.path.exists(trg_file_path) == True:
                                                         print('\tуже был ранее обработан')
                                                         break
-                                                
-                                                #Первый словарь конечного списка
-                                                #всегда будет содержать номер хромосомы,
-                                                #позицию и ID запрашиваемого SNP.
-                                                linked_snps.append({'chr': chr_num,
-                                                                    'queried.pos': query_snp_pos,
-                                                                    'queried.rsID': query_rs_id})
                                                 
                                                 #Открытие на чтение того из tabix-индексированных
                                                 #1000 Genomes-VCF, в котором точно есть запрашиваемый SNP.
@@ -274,13 +279,31 @@ for src_file_name in src_file_names:
                                                                                             "r2": ld_vals['r_square'],
                                                                                             "D'": ld_vals['d_prime']})
                                                                         
-                                                #Независимо от успешности поиска сцепленных
-                                                #SNPs, в конечный список попадает элемент
-                                                #с информацией о запрашиваемом SNP.
-                                                #Конечный файл будет создан только
-                                                #в том случае, если содержимое списка
-                                                #не ограничивается этим элементом.
-                                                if len(linked_snps) > 1:
+                                                #Конечная папка, хромосомная подпапка и
+                                                #файл с результатами могут быть созданы
+                                                #при условии, что в конечном списке
+                                                #оказался хоть один сцепленный SNP.
+                                                if linked_snps != []:
+
+                                                        #Если файлу с результатами быть,
+                                                        #конечный список дополнится
+                                                        #первым элементом, содержащим
+                                                        #номер хромосомы, позицию
+                                                        #и ID запрашиваемого SNP.
+                                                        linked_snps.insert(0, {'chr': int(chr_num),
+                                                                               'queried.pos': query_snp_pos,
+                                                                               'queried.rsID': query_rs_id})
+                                                        
+                                                        #Создание конечной папки и хромосомной
+                                                        #подпапки, если таковых ещё нет.
+                                                        #Если подпапка есть, то наличие
+                                                        #папки проверяться не будет.
+                                                        if os.path.exists(trg_chrdir_path) == False:
+                                                                if os.path.exists(trg_dir_path) == False:
+                                                                        os.mkdir(trg_dir_path)
+                                                                os.mkdir(trg_chrdir_path)
+
+                                                        #Создание и открытие конечного файла на запись.
                                                         with open(trg_file_path, 'w') as trg_file_opened:
                                                                 
                                                                 #Полученный ранее список словарей пропишется
