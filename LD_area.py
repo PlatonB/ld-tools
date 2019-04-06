@@ -1,4 +1,4 @@
-__version__ = 'V4.1'
+__version__ = 'V4.2'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.1.
+Версия: V4.2.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -245,20 +245,22 @@ for src_file_name in src_file_names:
                                                                 #в строку, а её - в список.
                                                                 oppos_snp_row = str(rec).split('\n')[0].split('\t')
                                                                 
-                                                                #Получение из этого списка таких
-                                                                #важных элементов, как позиция,
-                                                                #идентификатор и альтернативный
-                                                                #аллель кандидатного SNP.
-                                                                oppos_snp_pos, oppos_rs_id, oppos_snp_alt = int(oppos_snp_row[1]), \
-                                                                                                            oppos_snp_row[2], \
-                                                                                                            oppos_snp_row[4]
+                                                                #Получение из этого списка таких важных
+                                                                #элементов, как позиция, идентификатор
+                                                                #и info-ячейка кандидатного SNP.
+                                                                #В последней из перечисленных может
+                                                                #встречаться флаг MULTI_ALLELIC, позволяющий
+                                                                #идентифицировать не-биаллельные SNP.
+                                                                oppos_snp_pos, oppos_rs_id, oppos_snp_info = int(oppos_snp_row[1]), \
+                                                                                                             oppos_snp_row[2], \
+                                                                                                             oppos_snp_row[7]
                                                                 
                                                                 #Кандидатный SNP имеет шанс войти в конечный
                                                                 #список при соответствии нескольким критериям:
                                                                 #его идентификатор - refSNPID, он - не мультиаллельный
                                                                 #и не тот же самый, что и запрашиваемый.
                                                                 if re.match(r'rs\d+$', oppos_rs_id) != None \
-                                                                   and oppos_snp_alt.find(',') == -1 \
+                                                                   and oppos_snp_info.find('MULTI_ALLELIC') == -1 \
                                                                    and oppos_rs_id != query_rs_id:
                                                                         
                                                                         #Вычисление LD.
@@ -274,7 +276,7 @@ for src_file_name in src_file_names:
                                                                         #Добавление в конечный список
                                                                         #словаря с ID и позицией сцепленного
                                                                         #SNP, а также со значениями LD.
-                                                                        linked_snps.append({'linked.pos': oppos_snp_pos,
+                                                                        linked_snps.append({'linked.hg38': oppos_snp_pos,
                                                                                             'linked.rsID': oppos_rs_id,
                                                                                             "r2": ld_vals['r_square'],
                                                                                             "D'": ld_vals['d_prime']})
@@ -291,7 +293,7 @@ for src_file_name in src_file_names:
                                                         #номер хромосомы, позицию
                                                         #и ID запрашиваемого SNP.
                                                         linked_snps.insert(0, {'chr': int(chr_num),
-                                                                               'queried.pos': query_snp_pos,
+                                                                               'queried.hg38': query_snp_pos,
                                                                                'queried.rsID': query_rs_id})
                                                         
                                                         #Создание конечной папки и хромосомной
