@@ -1,4 +1,4 @@
-__version__ = 'V2.0'
+__version__ = 'V3.0'
 
 import urllib.request, re, os, json, gzip, sys, dbm
 
@@ -64,23 +64,36 @@ def process_intgen_data(intgen_dir_path):
                 print('''\nДля рассчёта LD необходимы данные 1000 Genomes.
 Их загрузка и оптимизация могут занять сутки.''')
                 
-        #Захардкодим URL того каталога FTP IGSR,
+        #Захардкодим URLs тех каталогов FTP IGSR,
         #где хостятся актуальные данные, необходимые
         #для рассчёта LD (1000 Genomes Phase 3).
-        intgen_ftp_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/'
+        #В одном каталоге координаты соответствуют
+        #сборке GRCh37 (hg19), в другом - GRCh38 (hg38).
+        #Из первого нужно будет скачать текстовый файл
+        #с популяциями и сэмплами (далее - панель).
+        #Из второго - архивы 1000 Genomes и их индексы.
+        #В каждом архиве - VCF-таблица с данными по SNPs
+        #одной хромосомы: идентификатор снипа, некоторые
+        #его характеристики и набор фазированных генотипов.
+        intgen_hg19_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/'
+        intgen_hg38_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/'
         
-        #Преобразуем страницу этого каталога в строку.
-        with urllib.request.urlopen(intgen_ftp_url) as response:
-                intgen_ftp_page = str(response.read())
+        #Преобразуем страницы обоих каталогов в строки.
+        #Из этих строк можно будет извлекать
+        #регулярками имена нужных файлов.
+        with urllib.request.urlopen(intgen_hg19_url) as response:
+                intgen_hg19_page = str(response.read())
+        with urllib.request.urlopen(intgen_hg38_url) as response:
+                intgen_hg38_page = str(response.read())
                 
-        #Извлечём оттуда имя текстового файла с
-        #популяциями и сэмплами (далее - панели).
-        intgen_samptxt_name = re.search(r'integrated_call_samples\S+?\.ALL\.panel(?=\\)', intgen_ftp_page).group()
+        #Получаем имя панели.
+        intgen_samptxt_name = re.search(r'integrated_call_samples\S+?\.ALL\.panel(?=\\)', intgen_hg19_page).group()
         
         #Если сохранённой панели нет, скачиваем её.
-        #Получаем путь к панели и название.
+        #Соответствующая функция также вернёт
+        #путь к панели и название таковой.
         print('')
-        intgen_samptxt_path, intgen_sampbase_name = download_intgen_file(intgen_ftp_url, intgen_samptxt_name, intgen_dir_path, -1)
+        intgen_samptxt_path, intgen_sampbase_name = download_intgen_file(intgen_hg19_url, intgen_samptxt_name, intgen_dir_path, -1)
         
         #Собираем из названия и расширения имя
         #будущей JSON-редакции панели и путь к ней.
@@ -131,10 +144,8 @@ def process_intgen_data(intgen_dir_path):
                                 json.dump(intgen_samptxt_dict, intgen_sampjson_opened, indent=4)
                                 
         #Вытаскиваем имена архивов 1000 Genomes.
-        #В каждом архиве - VCF-таблица с данными по SNPs
-        #одной хромосомы: идентификатор снипа, некоторые
-        #его характеристики и набор фазированных генотипов.
-        intgen_vcfgz_names = re.findall(r'ALL\.chr[^(?:MT)]\S+?\.vcf\.gz(?=\\)', intgen_ftp_page)
+        #Данные по митохондриальной ДНК игнорируются.
+        intgen_vcfgz_names = re.findall(r'ALL\.chr(?:\d{1,2}|X|Y)_GRCh38\.genotypes\.\S+?\.vcf\.gz(?=\\)', intgen_hg38_page)
         
         #Списки для накопления путей к
         #файлам 1000 Genomes без расширений.
@@ -151,13 +162,13 @@ def process_intgen_data(intgen_dir_path):
                 #При обнаружениии отсутствия этого
                 #файла вызываемая функция скачает его.
                 intgen_vcftbi_name = intgen_vcfgz_name + '.tbi'
-                download_intgen_file(intgen_ftp_url, intgen_vcftbi_name, intgen_dir_path, -3)
+                download_intgen_file(intgen_hg38_url, intgen_vcftbi_name, intgen_dir_path, -3)
 
                 #Проверка на наличие архива 1000 Genomes.
                 #Если его нет - он скачается, а также будет
                 #возвращён путь к архиву без расширения.
                 #Путь будет добавлен в список таких путей.
-                intgen_vcfgz_path, intgen_vcfbase_name = download_intgen_file(intgen_ftp_url, intgen_vcfgz_name, intgen_dir_path, -2)
+                intgen_vcfgz_path, intgen_vcfbase_name = download_intgen_file(intgen_hg38_url, intgen_vcfgz_name, intgen_dir_path, -2)
                 intgen_vcfbase_paths.append(os.path.join(intgen_dir_path, intgen_vcfbase_name))
                 
                 #Конструирование имени и пути для далее создаваемой базы.
@@ -206,14 +217,12 @@ def process_intgen_data(intgen_dir_path):
                                 #Построчное прочтение основной части VCF-таблицы.
                                 for line in intgen_vcfgz_opened:
                                         
-                                        #Создание списка из идентификатора SNP,
-                                        #референсного и альтернативного(-ых) аллеля(-ей).
-                                        part_row = line.split('\t')[2:5]
-                                        
-                                        #Получение из этого списка
-                                        #идентификатора SNP и одного или
-                                        #более альтернативных аллелей.
-                                        rs_cell, alt_cell = part_row[0], part_row[2]
+                                        #Создание списка, начинающегося
+                                        #с идентификатора SNP и
+                                        #заканчивающегося ячейкой info-столбца.
+                                        #info-ячейка далее пригодится
+                                        #для определение аллельности SNP.
+                                        part_row = line.split('\t')[2:8]
                                         
                                         #Вместо refSNPID могут попадаться
                                         #другие типы идентификаторов.
@@ -227,7 +236,7 @@ def process_intgen_data(intgen_dir_path):
                                         #поддерживаются калькулятором LD,
                                         #поэтому соответствующие refSNPID
                                         #в базу добавляться не будут.
-                                        if re.match(r'rs\d+$', rs_cell) != None and alt_cell.find(',') == -1:
-                                                intgen_vcfdb_opened[rs_cell] = compress_line(line)
+                                        if re.match(r'rs\d+$', part_row[0]) != None and part_row[5].find('MULTI_ALLELIC') == -1:
+                                                intgen_vcfdb_opened[part_row[0]] = compress_line(line)
                                                 
         return intgen_sampjson_path, intgen_vcfbase_paths
