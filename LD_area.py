@@ -1,4 +1,4 @@
-__version__ = 'V4.2'
+__version__ = 'V4.3'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.2.
+Версия: V4.3.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -273,13 +273,15 @@ for src_file_name in src_file_names:
                                                                         if ld_vals[thres_ld_measure] < thres_ld_value:
                                                                                 continue
                                                                         
-                                                                        #Добавление в конечный список
-                                                                        #словаря с ID и позицией сцепленного
-                                                                        #SNP, а также со значениями LD.
+                                                                        #Добавление в конечный список словаря
+                                                                        #с позицией и ID сцепленного SNP, а также
+                                                                        #со значениями LD и физическим расстоянием
+                                                                        #между запрашиваемым и сцепленным SNP.
                                                                         linked_snps.append({'linked.hg38': oppos_snp_pos,
                                                                                             'linked.rsID': oppos_rs_id,
                                                                                             "r2": ld_vals['r_square'],
-                                                                                            "D'": ld_vals['d_prime']})
+                                                                                            "D'": ld_vals['d_prime'],
+                                                                                            'distance': oppos_snp_pos - query_snp_pos})
                                                                         
                                                 #Конечная папка, хромосомная подпапка и
                                                 #файл с результатами могут быть созданы
@@ -287,14 +289,19 @@ for src_file_name in src_file_names:
                                                 #оказался хоть один сцепленный SNP.
                                                 if linked_snps != []:
 
-                                                        #Если файлу с результатами быть,
-                                                        #конечный список дополнится
+                                                        #Если файлу с результатами
+                                                        #быть, конечный список дополнится
                                                         #первым элементом, содержащим
                                                         #номер хромосомы, позицию
-                                                        #и ID запрашиваемого SNP.
+                                                        #и ID запрашиваемого SNP,
+                                                        #а также параметры запроса.
                                                         linked_snps.insert(0, {'chr': int(chr_num),
                                                                                'queried.hg38': query_snp_pos,
-                                                                               'queried.rsID': query_rs_id})
+                                                                               'queried.rsID': query_rs_id,
+                                                                               'flank': flank_size,
+                                                                               thres_ld_measure: thres_ld_value,
+                                                                               'populations': populations,
+                                                                               'genders': genders})
                                                         
                                                         #Создание конечной папки и хромосомной
                                                         #подпапки, если таковых ещё нет.
