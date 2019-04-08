@@ -1,11 +1,11 @@
-__version__ = 'V4.0'
+__version__ = 'V4.1'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.0.
+Версия: V4.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -207,8 +207,8 @@ for src_file_name in src_file_names:
                 for header_index in range(num_of_headers):
                         src_file_opened.readline()
                         
-                print(f'''\n\n{src_file_name}: подготовка набора SNPs...
-Предупреждения (если будут):''')
+                print(f'''\n\n{src_file_name}
+Подготовка набора SNPs. Предупреждения (если будут):''')
                 
                 ##Очистка пользовательского набора refSNPID от повторяющихся.
                 
@@ -229,7 +229,7 @@ for src_file_name in src_file_names:
                         
                 #Проверка, есть ли в пользовательском наборе хотя бы 2 refSNPID.
                 if len(rs_ids) < 2:
-                        print(f'{src_file_name} содержит менее двух refSNPIDs. Будет проигнорирован')
+                        print('\nФайл содержит менее двух refSNPIDs. Будет проигнорирован')
                         continue
                         
                 ##Распределение по хромосомам пользовательских refSNPIDs.
@@ -275,7 +275,7 @@ for src_file_name in src_file_names:
                         #Одна из вероятных причин - в том,
                         #что именуемый им SNP - не биаллельный.
                         else:
-                                print(f'{rs_id} - невалидный refSNPID (возможно, ID мультиаллельного SNP). В матрицу не пойдёт')
+                                print(f'\t{rs_id} - невалидный refSNPID (возможно, ID мультиаллельного SNP). В матрицу не пойдёт')
                                 continue
                         
                         #Извлечение из refSNPID-содержащего списка
@@ -297,7 +297,7 @@ for src_file_name in src_file_names:
                 #файла, будет пустота словаря, предназначенного
                 #для похромосомного распределения данных.
                 if rows_by_chrs == {}:
-                        print(f'{src_file_name} не содержит ни одного валидного refSNPID')
+                        print(f'\t{src_file_name} не содержит ни одного валидного refSNPID')
                         continue
                         
                 ##Сортировка списка refSNPID по их позиции в хромосоме.
@@ -323,7 +323,7 @@ for src_file_name in src_file_names:
                         poss_srtd = [row[1] for row in rows_by_chrs[chr_num]]
                         rs_ids_srtd = [row[2] for row in rows_by_chrs[chr_num]]
                         
-                        print(f'\n{src_file_name}: хромосома {chr_num}: формирование LD-матрицы...')
+                        print(f'\nхромосома {chr_num}: формирование LD-матрицы...')
                         
                         ##Создание двумерных массивов такой структуры:
                         '''
@@ -404,7 +404,7 @@ gend: {" ".join(genders)}
                         #Пользователь указал создавать текстовые версии LD-матриц.
                         if output == 'table' or output == 't' or output == 'both' or output == '':
                                 
-                                print(f'{src_file_name}: хромосома {chr_num}: сохранение текстовой LD-матрицы...')
+                                print(f'хромосома {chr_num}: сохранение текстовой LD-матрицы...')
                                 
                                 #Создание текстового конечного файла.
                                 #Прописываем в него хэдер с общими
@@ -434,7 +434,7 @@ gend: {" ".join(genders)}
                         #пользователь предпочёл LD-матрицы визуализировать.
                         if 'color_map' in locals():
                                 
-                                print(f'{src_file_name}: хромосома {chr_num}: визуализация LD-матрицы...')
+                                print(f'хромосома {chr_num}: визуализация LD-матрицы...')
                                 
                                 #Plotly позволяет строить тепловые карты
                                 #как без надписей, так и с таковыми.
