@@ -1,4 +1,4 @@
-__version__ = 'V4.3'
+__version__ = 'V4.4'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.3.
+Версия: V4.4.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -108,7 +108,14 @@ elif thres_ld_measure != 'r_square' and thres_ld_measure != 'd_prime':
         sys.exit()
         
 thres_ld_value = float(input(f'\n{thres_ld_measure} ≥ '))
-        
+
+verbose = input('''\nВыводить подробную информацию о ходе работы?
+(не рекомендуется, если набор
+исходных данных очень большой)
+(игнорирование ввода ==> не выводить)
+[yes(|y)|no(|n|<enter>)]: ''')
+check_input(verbose)
+
 #Вызов функции, которая скачает заархивированные
 #VCF и панель сэмплов проекта 1000 Genomes,
 #если они ещё не скачаны, а также разместит
@@ -161,8 +168,9 @@ for src_file_name in src_file_names:
                         except AttributeError:
                                 continue
                         
-                        print(f'\n{query_rs_id}...')
-                        
+                        if verbose == 'yes' or verbose == 'y':
+                                print(f'\n{query_rs_id}...')
+                                
                         #Список, в который будут помещаться,
                         #как минимум, идентификаторы SNP,
                         #сцепленных с запрашиваемым.
@@ -220,7 +228,8 @@ for src_file_name in src_file_names:
                                                 #повторно, то необходимо предотвратить
                                                 #поиск SNPs, с ним сцепленных.
                                                 if os.path.exists(trg_file_path) == True:
-                                                        print('\tуже был ранее обработан')
+                                                        if verbose == 'yes' or verbose == 'y':
+                                                                print('\tуже был ранее обработан')
                                                         break
                                                 
                                                 #Открытие на чтение того из tabix-индексированных
@@ -277,7 +286,7 @@ for src_file_name in src_file_names:
                                                                         #с позицией и ID сцепленного SNP, а также
                                                                         #со значениями LD и физическим расстоянием
                                                                         #между запрашиваемым и сцепленным SNP.
-                                                                        linked_snps.append({'linked.hg38': oppos_snp_pos,
+                                                                        linked_snps.append({'linked.hg38_pos': oppos_snp_pos,
                                                                                             'linked.rsID': oppos_rs_id,
                                                                                             "r2": ld_vals['r_square'],
                                                                                             "D'": ld_vals['d_prime'],
@@ -288,17 +297,17 @@ for src_file_name in src_file_names:
                                                 #при условии, что в конечном списке
                                                 #оказался хоть один сцепленный SNP.
                                                 if linked_snps != []:
-
+                                                        
                                                         #Если файлу с результатами
                                                         #быть, конечный список дополнится
                                                         #первым элементом, содержащим
                                                         #номер хромосомы, позицию
                                                         #и ID запрашиваемого SNP,
                                                         #а также параметры запроса.
-                                                        linked_snps.insert(0, {'chr': int(chr_num),
-                                                                               'queried.hg38': query_snp_pos,
+                                                        linked_snps.insert(0, {'chrom': int(chr_num),
+                                                                               'queried.hg38_pos': query_snp_pos,
                                                                                'queried.rsID': query_rs_id,
-                                                                               'flank': flank_size,
+                                                                               'flank_size': flank_size,
                                                                                thres_ld_measure: thres_ld_value,
                                                                                'populations': populations,
                                                                                'genders': genders})
@@ -311,7 +320,7 @@ for src_file_name in src_file_names:
                                                                 if os.path.exists(trg_dir_path) == False:
                                                                         os.mkdir(trg_dir_path)
                                                                 os.mkdir(trg_chrdir_path)
-
+                                                                
                                                         #Создание и открытие конечного файла на запись.
                                                         with open(trg_file_path, 'w') as trg_file_opened:
                                                                 
@@ -319,7 +328,7 @@ for src_file_name in src_file_names:
                                                                 #в JSON-файл с формированием отступов.
                                                                 json.dump(linked_snps, trg_file_opened, indent=4)
                                                                 
-                                                else:
+                                                elif verbose == 'yes' or verbose == 'y':
                                                         print(f'\t{thres_ld_measure} >= {thres_ld_value}: SNPs в LD не найдены')
                                                         
                                                 break
@@ -331,5 +340,6 @@ for src_file_name in src_file_names:
                         #Одна из вероятных причин - в том,
                         #что именуемый им SNP - не биаллельный.
                         else:
-                                print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
+                                if verbose == 'yes' or verbose == 'y':
+                                        print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
                                 continue
