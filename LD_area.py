@@ -1,4 +1,4 @@
-__version__ = 'V4.4'
+__version__ = 'V4.5'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.4.
+Версия: V4.5.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -68,10 +68,9 @@ else:
         
 populations = input('''\nДля индивидов какой(-их) супер-/субпопуляции(-ий) считать LD?
 (http://www.internationalgenome.org/faq/which-populations-are-part-your-study/)
-(в любом регистре)
 (несколько - через пробел)
 (игнорирование ввода ==> всех)
-[ALL(|<enter>)|EUR|JPT|JPT AMR YRI|...]: ''').upper().split()
+[all(|<enter>)|eur|jpt|jpt amr yri|...]: ''').upper().split()
 if populations == []:
         populations = ['ALL']
         
@@ -88,7 +87,7 @@ elif genders != ['male'] and genders != ['female']:
         print(f'{genders[0]} - недопустимая опция')
         sys.exit()
         
-flank_size = input('''\nРазмер каждого из фланков, в пределах
+flank_size = input('''\nРазмер *каждого* из фланков, в пределах
 которых надо искать сцепленные SNP
 (игнорирование ввода ==> 100000)
 [100000(|<enter>)|250000|...]: ''')
@@ -152,7 +151,8 @@ for src_file_name in src_file_names:
         #Открытие файла пользователя на чтение.
         with open(os.path.join(src_dir_path, src_file_name)) as src_file_opened:
                 
-                print(f'\n\n{src_file_name}')
+                print(f'''\n~
+\n{src_file_name}''')
                 
                 #Считываем строки-хэдеры, чтобы сместить
                 #курсор к началу основной части таблицы.
