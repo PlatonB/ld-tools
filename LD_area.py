@@ -1,4 +1,4 @@
-__version__ = 'V4.5'
+__version__ = 'V4.6'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.5.
+Версия: V4.6.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -34,6 +34,19 @@ def check_input(var):
                 print(f'{var} - недопустимая опция')
                 sys.exit()
                 
+def join_header_element(header_key, header_val):
+        '''
+        Конечные не-JSON-файлы будут начинаться
+        с хэдеров, структура которых напоминает
+        таковую у хэдеров UCSC Table Browser.
+        Эта функция собирает каждый элемент хэдера.
+        '''
+        if type(header_val).__name__ == 'str':
+                header_val = f'"{header_val}"'
+        elif type(header_val).__name__ == 'list':
+                header_val = ','.join([f'"{header_val_element}"' for header_val_element in header_val])
+        return f'{header_key}={header_val}'
+
 ####################################################################################################
 
 print('\nИмпорт модулей программы...')
@@ -108,6 +121,18 @@ elif thres_ld_measure != 'r_square' and thres_ld_measure != 'd_prime':
         
 thres_ld_value = float(input(f'\n{thres_ld_measure} ≥ '))
 
+trg_file_type = input('''\nФормат конечных файлов
+(игнорирование ввода ==> json)
+[json(|j|<enter>)|rsids(|r)]: ''')
+if trg_file_type != 'json' and trg_file_type != 'j' and trg_file_type != 'rsids' \
+   and trg_file_type != 'r' and trg_file_type != '':
+        print(f'{trg_file_type} - недопустимая опция')
+        sys.exit()
+elif trg_file_type == 'j' or trg_file_type == '':
+        trg_file_type = 'json'
+elif trg_file_type == 'r':
+        trg_file_type = 'rsids'
+        
 verbose = input('''\nВыводить подробную информацию о ходе работы?
 (не рекомендуется, если набор
 исходных данных очень большой)
@@ -221,7 +246,11 @@ for src_file_name in src_file_names:
                                                 #сцепленного, то в файловой системе
                                                 #также никаких изменений не произойдёт.
                                                 trg_chrdir_path = os.path.join(trg_dir_path, chr_num)
-                                                trg_file_name = f'{chr_num}_{query_rs_id}_{thres_ld_measure[0]}_{str(thres_ld_value)}.json'
+                                                if trg_file_type == 'json':
+                                                        ext = trg_file_type
+                                                else:
+                                                        ext = 'txt'
+                                                trg_file_name = f'{chr_num}_{query_rs_id}_{thres_ld_measure[0]}_{str(thres_ld_value)}.{ext}'
                                                 trg_file_path = os.path.join(trg_chrdir_path, trg_file_name)
                                                 
                                                 #Если запрашиваемый SNP встретился
@@ -282,35 +311,28 @@ for src_file_name in src_file_names:
                                                                         if ld_vals[thres_ld_measure] < thres_ld_value:
                                                                                 continue
                                                                         
-                                                                        #Добавление в конечный список словаря
-                                                                        #с позицией и ID сцепленного SNP, а также
-                                                                        #со значениями LD и физическим расстоянием
-                                                                        #между запрашиваемым и сцепленным SNP.
-                                                                        linked_snps.append({'linked.hg38_pos': oppos_snp_pos,
-                                                                                            'linked.rsID': oppos_rs_id,
-                                                                                            "r2": ld_vals['r_square'],
-                                                                                            "D'": ld_vals['d_prime'],
-                                                                                            'distance': oppos_snp_pos - query_snp_pos})
-                                                                        
+                                                                        #Добавление в конечный список очередного элемента.
+                                                                        #Что это будет за элемент - зависит от решения
+                                                                        #пользователя, в каком виде выводить результаты.
+                                                                        #Если конечный формат - JSON, то в список пойдёт словарь
+                                                                        #с позицией и ID сцепленного SNP, а также со значениями LD и
+                                                                        #физическим расстоянием между запрашиваемым и сцепленным SNP.
+                                                                        #Если пользователь предпочёл самый минималистичный вывод,
+                                                                        #то этот список пополнится только ID сцепленного SNP.
+                                                                        if trg_file_type == 'json':
+                                                                                linked_snps.append({'lnkd.hg38_pos': oppos_snp_pos,
+                                                                                                    'lnkd.rsID': oppos_rs_id,
+                                                                                                    "r2": ld_vals['r_square'],
+                                                                                                    "D'": ld_vals['d_prime'],
+                                                                                                    'dist': oppos_snp_pos - query_snp_pos})
+                                                                        elif trg_file_type == 'rsids':
+                                                                                linked_snps.append(oppos_rs_id)
+                                                                                
                                                 #Конечная папка, хромосомная подпапка и
                                                 #файл с результатами могут быть созданы
                                                 #при условии, что в конечном списке
                                                 #оказался хоть один сцепленный SNP.
                                                 if linked_snps != []:
-                                                        
-                                                        #Если файлу с результатами
-                                                        #быть, конечный список дополнится
-                                                        #первым элементом, содержащим
-                                                        #номер хромосомы, позицию
-                                                        #и ID запрашиваемого SNP,
-                                                        #а также параметры запроса.
-                                                        linked_snps.insert(0, {'chrom': int(chr_num),
-                                                                               'queried.hg38_pos': query_snp_pos,
-                                                                               'queried.rsID': query_rs_id,
-                                                                               'flank_size': flank_size,
-                                                                               thres_ld_measure: thres_ld_value,
-                                                                               'populations': populations,
-                                                                               'genders': genders})
                                                         
                                                         #Создание конечной папки и хромосомной
                                                         #подпапки, если таковых ещё нет.
@@ -321,13 +343,54 @@ for src_file_name in src_file_names:
                                                                         os.mkdir(trg_dir_path)
                                                                 os.mkdir(trg_chrdir_path)
                                                                 
+                                                        #Если файлу с результатами
+                                                        #быть, конечный список дополнится
+                                                        #первым элементом, содержащим
+                                                        #номер хромосомы, позицию
+                                                        #и ID запрашиваемого SNP,
+                                                        #а также параметры запроса.
+                                                        #Для начала готовится "сырой"
+                                                        #вариант этого элемента,
+                                                        #представляющий собой два
+                                                        #списка: отдельно названия и
+                                                        #значения всех характеристик.
+                                                        header_keys, header_vals = ['chr',
+                                                                                    'quer.hg38_pos',
+                                                                                    'quer.rsID',
+                                                                                    'each_flank',
+                                                                                    f'{thres_ld_measure}_thres',
+                                                                                    'pops',
+                                                                                    'gends'], [int(chr_num),
+                                                                                               query_snp_pos,
+                                                                                               query_rs_id,
+                                                                                               flank_size,
+                                                                                               thres_ld_value,
+                                                                                               populations,
+                                                                                               genders]
+                                                        
+                                                        #"Сырые" списки собираются в словарь или
+                                                        #строковый хэдер в зависимости от выбранной
+                                                        #пользователем структуры output-файла.
+                                                        if trg_file_type == 'json':
+                                                                linked_snps.insert(0, dict(zip(header_keys,
+                                                                                               header_vals)))
+                                                        elif trg_file_type == 'rsids':
+                                                                linked_snps.insert(0, '#' + ' '.join(map(join_header_element,
+                                                                                                         header_keys,
+                                                                                                         header_vals)))
+                                                                
                                                         #Создание и открытие конечного файла на запись.
                                                         with open(trg_file_path, 'w') as trg_file_opened:
                                                                 
-                                                                #Полученный ранее список словарей пропишется
-                                                                #в JSON-файл с формированием отступов.
-                                                                json.dump(linked_snps, trg_file_opened, indent=4)
-                                                                
+                                                                #Полученный ранее конечный список пропишется
+                                                                #либо в JSON-файл с формированием отступов,
+                                                                #либо построчно в обычный текстовый файл.
+                                                                if trg_file_type == 'json':
+                                                                        json.dump(linked_snps, trg_file_opened, indent=4)
+                                                                elif trg_file_type == 'rsids':
+                                                                        for line in linked_snps:
+                                                                                trg_file_opened.write(line + '\n')
+                                                                                
                                                 elif verbose == 'yes' or verbose == 'y':
                                                         print(f'\t{thres_ld_measure} >= {thres_ld_value}: SNPs в LD не найдены')
                                                         
