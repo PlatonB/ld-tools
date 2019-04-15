@@ -1,4 +1,4 @@
-__version__ = 'V4.6'
+__version__ = 'V4.7'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.6.
+Версия: V4.7.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -301,29 +301,34 @@ for src_file_name in src_file_names:
                                                                    and oppos_snp_info.find('MULTI_ALLELIC') == -1 \
                                                                    and oppos_rs_id != query_rs_id:
                                                                         
-                                                                        #Вычисление LD.
-                                                                        ld_vals = ld_calc(query_snp_row,
-                                                                                          oppos_snp_row,
-                                                                                          sample_indices)
+                                                                        #Получение значений LD.
+                                                                        #Полезный побочный продукт функции -
+                                                                        #частоты альтернативного аллеля
+                                                                        #запрашиваемого и кандидатного SNPs.
+                                                                        trg_vals = ld_calc(query_snp_row,
+                                                                                           oppos_snp_row,
+                                                                                           sample_indices)
                                                                         
                                                                         #Отбор кандидатных SNP по
                                                                         #пользовательскому порогу LD.
-                                                                        if ld_vals[thres_ld_measure] < thres_ld_value:
+                                                                        if trg_vals[thres_ld_measure] < thres_ld_value:
                                                                                 continue
                                                                         
                                                                         #Добавление в конечный список очередного элемента.
                                                                         #Что это будет за элемент - зависит от решения
                                                                         #пользователя, в каком виде выводить результаты.
                                                                         #Если конечный формат - JSON, то в список пойдёт словарь
-                                                                        #с позицией и ID сцепленного SNP, а также со значениями LD и
-                                                                        #физическим расстоянием между запрашиваемым и сцепленным SNP.
+                                                                        #с позицией, ID и частотой альтернативного аллеля (AF)
+                                                                        #сцепленного SNP, а также со значениями LD и физическим
+                                                                        #расстоянием между запрашиваемым и сцепленным SNP.
                                                                         #Если пользователь предпочёл самый минималистичный вывод,
                                                                         #то этот список пополнится только ID сцепленного SNP.
                                                                         if trg_file_type == 'json':
                                                                                 linked_snps.append({'lnkd.hg38_pos': oppos_snp_pos,
                                                                                                     'lnkd.rsID': oppos_rs_id,
-                                                                                                    "r2": ld_vals['r_square'],
-                                                                                                    "D'": ld_vals['d_prime'],
+                                                                                                    'lnkd.alt_freq': trg_vals['snp_2_alt_freq'],
+                                                                                                    "r2": trg_vals['r_square'],
+                                                                                                    "D'": trg_vals['d_prime'],
                                                                                                     'dist': oppos_snp_pos - query_snp_pos})
                                                                         elif trg_file_type == 'rsids':
                                                                                 linked_snps.append(oppos_rs_id)
@@ -346,23 +351,31 @@ for src_file_name in src_file_names:
                                                         #Если файлу с результатами
                                                         #быть, конечный список дополнится
                                                         #первым элементом, содержащим
-                                                        #номер хромосомы, позицию
-                                                        #и ID запрашиваемого SNP,
+                                                        #номер хромосомы, позицию,
+                                                        #ID и частоту альтернативного
+                                                        #аллеля запрашиваемого SNP,
                                                         #а также параметры запроса.
+                                                        #AF запрашиваемого SNP возвращается
+                                                        #при каждом вызове функции рассчёта
+                                                        #LD, поэтому её можно взять из
+                                                        #словаря, получившегося при
+                                                        #последнем таком рассчёте.
                                                         #Для начала готовится "сырой"
-                                                        #вариант этого элемента,
+                                                        #вариант первого элемента,
                                                         #представляющий собой два
                                                         #списка: отдельно названия и
                                                         #значения всех характеристик.
                                                         header_keys, header_vals = ['chr',
                                                                                     'quer.hg38_pos',
                                                                                     'quer.rsID',
+                                                                                    'quer.alt_freq',
                                                                                     'each_flank',
                                                                                     f'{thres_ld_measure}_thres',
                                                                                     'pops',
                                                                                     'gends'], [int(chr_num),
                                                                                                query_snp_pos,
                                                                                                query_rs_id,
+                                                                                               trg_vals['snp_1_alt_freq'],
                                                                                                flank_size,
                                                                                                thres_ld_value,
                                                                                                populations,
