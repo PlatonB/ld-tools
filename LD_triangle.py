@@ -1,11 +1,11 @@
-__version__ = 'V4.2'
+__version__ = 'V4.3'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.2.
+Версия: V4.3.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -51,10 +51,9 @@ import sys
 sys.dont_write_bytecode = True
 
 import random, os, re, gzip, dbm, copy
-sys.path.insert(0, os.path.join(os.getcwd(), 'backend'))
-from prepare_intgen_data import process_intgen_data
-from retrieve_sample_indices import retrieve_sample_indices
-from ld_calc import ld_calc
+from backend.prepare_intgen_data import process_intgen_data
+from backend.retrieve_sample_indices import retrieve_sample_indices
+from backend.ld_calc import ld_calc
 import plotly as py, plotly.graph_objs as go, plotly.figure_factory as ff
 
 src_dir_path = input('\nПуть к папке с исходными файлами: ')

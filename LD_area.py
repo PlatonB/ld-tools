@@ -1,4 +1,4 @@
-__version__ = 'V4.7'
+__version__ = 'V4.8'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.7.
+Версия: V4.8.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -58,10 +58,9 @@ import sys
 sys.dont_write_bytecode = True
 
 import random, os, re, gzip, dbm, json
-sys.path.insert(0, os.path.join(os.getcwd(), 'backend'))
-from prepare_intgen_data import process_intgen_data
-from retrieve_sample_indices import retrieve_sample_indices
-from ld_calc import ld_calc
+from backend.prepare_intgen_data import process_intgen_data
+from backend.retrieve_sample_indices import retrieve_sample_indices
+from backend.ld_calc import ld_calc
 from pysam import VariantFile
 
 src_dir_path = input('\nПуть к папке с исходными файлами: ')
