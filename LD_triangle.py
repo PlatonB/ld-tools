@@ -1,11 +1,11 @@
-__version__ = 'V4.3'
+__version__ = 'V4.4'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.3.
+Версия: V4.4.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -337,7 +337,7 @@ for src_file_name in src_file_names:
                 #размером n x n, состоящего из нулей.
                 #Нули в дальнейшем могут заменяться на значения LD.
                 ld_two_dim = [[0 for cell_index in range(rows_in_chr_amount)] for row_index in range(rows_in_chr_amount)]
-
+                
                 #В случае, если будет строиться диаграмма,
                 #такой же шаблон понадобится для создания
                 #матрицы сопутствующей информации.
@@ -361,27 +361,31 @@ for src_file_name in src_file_names:
                                 if row_index > col_index:
                                         
                                         #Обращение к оффлайн-калькулятору для
-                                        #получения словаря с r2 и D' текущей пары SNP.
-                                        ld_vals = ld_calc(rows_by_chrs[chr_num][row_index],
-                                                          rows_by_chrs[chr_num][col_index],
-                                                          sample_indices)
+                                        #получения словаря с r2, D' и частотами
+                                        #минорного аллеля текущей пары SNP.
+                                        trg_vals = ld_calc(rows_by_chrs[chr_num][row_index],
+                                                           rows_by_chrs[chr_num][col_index],
+                                                           sample_indices)
                                         
                                         #Для диаграммы каждое значение LD аннотируется:
                                         #параллельно с накоплением массива LD-значений растёт
                                         #массив дополнительной информации по каждой паре SNP.
                                         if 'info_two_dim' in locals():
                                                 info_two_dim[row_index][col_index] = f'''
-r2: {ld_vals["r_square"]},
-D': {ld_vals["d_prime"]} ▓
+r2: {trg_vals["r_square"]},
+D': {trg_vals["d_prime"]},
+abs_dist: {abs(int(poss_srtd[col_index]) - int(poss_srtd[row_index]))} ▓
 chr: {chr_num},
-x.pos: {poss_srtd[col_index]},
-y.pos: {poss_srtd[row_index]} ▓
+x.hg38_pos: {poss_srtd[col_index]},
+y.hg38_pos: {poss_srtd[row_index]} ▓
 x.rsID: {rs_ids_srtd[col_index]},
 y.rsID: {rs_ids_srtd[row_index]} ▓
-pop: {" ".join(populations)},
-gend: {" ".join(genders)}
+x.alt_freq: {trg_vals['snp_2_alt_freq']},
+y.alt_freq: {trg_vals['snp_1_alt_freq']} ▓
+pops: {" ".join(populations)},
+gends: {" ".join(genders)}
 '''
-                                        
+                                                
                                         #Пользователь мог установить нижний порог LD.
                                         #Соответствующий блок кода неспроста расположен после
                                         #блока накопления аннотаций: на диаграммах клеточки с
@@ -391,14 +395,14 @@ gend: {" ".join(genders)}
                                         #При обратном расположении этих блоков аннотации подпороговых
                                         #LD не сохранялись бы, ведь в блоке фильтрации - continue.
                                         if 'thres_ld_measure' in locals():
-                                                if ld_vals[thres_ld_measure] < ld_value_thres:
+                                                if trg_vals[thres_ld_measure] < ld_value_thres:
                                                         continue
                                                 
                                         #Если значение LD не отсеилось как
                                         #подпороговое, то попадёт в LD-матрицу:
                                         #0-ячейка будет заменена на найденное
                                         #значение LD выбранной величины.
-                                        ld_two_dim[row_index][col_index] = ld_vals[ld_measure]
+                                        ld_two_dim[row_index][col_index] = trg_vals[ld_measure]
                                         
                 ##Сохранение результатов.
                 
