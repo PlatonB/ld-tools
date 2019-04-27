@@ -1,11 +1,11 @@
-__version__ = 'V4.4'
+__version__ = 'V4.5'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.4.
+Версия: V4.5.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -419,10 +419,10 @@ gends: {" ".join(genders)}
                         #Потом прописываем LD-строки,
                         #добавляя перед каждой из
                         #них тоже refSNPID и позицию.
-                        tsv_file_name = f'{src_file_base}_chr{chr_num}_{ld_measure}_tab.tsv'
+                        tsv_file_name = f'{src_file_base}_chr{chr_num}_{ld_measure[0]}_tab.tsv'
                         with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
                                 tab = '\t'
-                                tsv_file_opened.write(f'#General\tinfo:\tchr{chr_num}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
+                                tsv_file_opened.write(f'#General\tinfo:\t{ld_measure}\tchr{chr_num}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
                                 tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
                                 tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
                                 rs_id_index = 0
@@ -463,8 +463,8 @@ gends: {" ".join(genders)}
                         #осей: для начала - запретом вывода лейблов.
                         if texts == 'no' or texts == 'n' or texts == '':
                                 trace = go.Heatmap(z=ld_two_dim,
-                                                   hovertext = info_two_dim,
-                                                   hoverinfo = 'text',
+                                                   hovertext=info_two_dim,
+                                                   hoverinfo='text',
                                                    xgap=1,
                                                    ygap=1,
                                                    colorscale=color_map,
@@ -502,8 +502,8 @@ gends: {" ".join(genders)}
                                 ld_heatmap = ff.create_annotated_heatmap(ld_two_dim,
                                                                          x=rs_ids_srtd,
                                                                          y=rs_ids_srtd,
-                                                                         hovertext = info_two_dim,
-                                                                         hoverinfo = 'text',
+                                                                         hovertext=info_two_dim,
+                                                                         hoverinfo='text',
                                                                          xgap=1,
                                                                          ygap=1,
                                                                          colorscale=color_map,
@@ -514,13 +514,13 @@ gends: {" ".join(genders)}
                                 #добавлена пара ключ-значение с данным размером.
                                 if val_font_size != 'default':
                                         for ann_num in range(len(ld_heatmap['layout']['annotations'])):
-                                                ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = int(val_font_size)
+                                                ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = val_font_size
                                                 
                                 #При желании, пользователь мог задать недефолтное
                                 #значение параметра размера шрифта лейблов осей.
                                 if lab_font_size != 'default':
-                                        ld_heatmap['layout']['xaxis']['tickfont'] = {'size': int(lab_font_size)}
-                                        ld_heatmap['layout']['yaxis']['tickfont'] = {'size': int(lab_font_size)}
+                                        ld_heatmap['layout']['xaxis']['tickfont'] = {'size': lab_font_size}
+                                        ld_heatmap['layout']['yaxis']['tickfont'] = {'size': lab_font_size}
                                         
                         #В тепловых картах Plotly, обычных и аннотированных,
                         #ось Y по умолчанию направлена снизу вверх.
@@ -532,5 +532,5 @@ gends: {" ".join(genders)}
                         ld_heatmap['layout']['yaxis']['autorange'] = 'reversed'
                         
                         #Построение диаграммы и её сохранение в HTML.
-                        html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_{ld_measure}_diag.html'
-                        py.offline.plot(ld_heatmap, filename = html_file_path, auto_open=False)
+                        html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_{ld_measure[0]}_diag.html'
+                        py.offline.plot(ld_heatmap, filename=html_file_path, auto_open=False)
