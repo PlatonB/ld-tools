@@ -1,4 +1,4 @@
-__version__ = 'V4.8'
+__version__ = 'V5.0'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.8.
+Версия: V5.0.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -267,16 +267,27 @@ for src_file_name in src_file_names:
                                                 #Из этого vcf.gz-файла будут вытаскиваться сцепленные SNPs.
                                                 with VariantFile(intgen_vcfbase_path + '.vcf.gz') as variant_file_obj:
                                                         
-                                                        #Перебор объектов, соответствующих
-                                                        #заданному пользователем координатному
-                                                        #окну вокруг запрашиваемого SNP.
+                                                        #Получение координат — границ фланков, размер
+                                                        #которых на этапе диалога задан пользователем.
+                                                        #Расстояние между границами будем называть окном.
+                                                        #Если запрашиваемый SNP расположен настолько близко к
+                                                        #началу хромосомы, что левый фланк вылезает за него, то
+                                                        #окно будет принудительно отмеряться от нулевой координаты.
+                                                        #Аналогичной проблемы для конца хромосомы не возникает,
+                                                        #т.к. здесь pysam — молодец — самостоятельно справляется.
+                                                        window_left_border = query_snp_pos - flank_size
+                                                        if window_left_border < 0:
+                                                                window_left_border = 0
+                                                        window_right_border = query_snp_pos + flank_size
+                                                        
+                                                        #Перебор объектов, соответствующих окну.
                                                         #Каждый объект - это представленная
                                                         #pysam'ом refSNPID-содержащая строка.
                                                         #SNPs из описываемых объектов
                                                         #будем называть кандидатными.
                                                         for rec in variant_file_obj.fetch(chr_num,
-                                                                                          query_snp_pos - flank_size,
-                                                                                          query_snp_pos + flank_size):
+                                                                                          window_left_border,
+                                                                                          window_right_border):
                                                                 
                                                                 #Преобразование pysam-объекта
                                                                 #в строку, а её - в список.
