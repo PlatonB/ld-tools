@@ -1,4 +1,4 @@
-__version__ = 'V3.0'
+__version__ = 'V3.1'
 
 import urllib.request, re, os, json, gzip, sys, dbm
 
@@ -157,13 +157,13 @@ def process_intgen_data(intgen_dir_path):
         #dbm-базы, основанные на данных из 1000 Genomes-VCFs.
         #Попутно будут скачиваться tabix-индексы.
         for intgen_vcfgz_name in intgen_vcfgz_names:
-
+                
                 #Формирование имени табикс-индекса.
                 #При обнаружениии отсутствия этого
                 #файла вызываемая функция скачает его.
                 intgen_vcftbi_name = intgen_vcfgz_name + '.tbi'
                 download_intgen_file(intgen_hg38_url, intgen_vcftbi_name, intgen_dir_path, -3)
-
+                
                 #Проверка на наличие архива 1000 Genomes.
                 #Если его нет - он скачается, а также будет
                 #возвращён путь к архиву без расширения.
@@ -177,7 +177,7 @@ def process_intgen_data(intgen_dir_path):
                 
                 #Проверка, нет ли у пользователя уже готовой базы.
                 #Если есть, то пропускаем процесс создания.
-                if os.path.exists(intgen_vcfdb_path) == True:
+                if dbm.whichdb(intgen_vcfdb_path) != None:
                         print(f'{intgen_vcfdb_name} уже создан\n')
                         continue
                 print(f'{intgen_vcfdb_name} не найден. Создание...\n')
