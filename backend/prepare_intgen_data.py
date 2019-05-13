@@ -1,4 +1,4 @@
-__version__ = 'V3.1'
+__version__ = 'V3.2'
 
 import urllib.request, re, os, json, gzip, sys, dbm
 
@@ -178,9 +178,10 @@ def process_intgen_data(intgen_dir_path):
                 #Проверка, нет ли у пользователя уже готовой базы.
                 #Если есть, то пропускаем процесс создания.
                 if dbm.whichdb(intgen_vcfdb_path) != None:
-                        print(f'{intgen_vcfdb_name} уже создан\n')
+                        print(f'{intgen_vcfdb_name} уже создан')
+                        print(f'({dbm.whichdb(intgen_vcfdb_path)})\n')
                         continue
-                print(f'{intgen_vcfdb_name} не найден. Создание...\n')
+                print(f'{intgen_vcfdb_name} не найден. Создание...')
                 
                 #Открываем архив 1000 Genomes на чтение таким образом, чтобы 
                 #находящийся внутри VCF считывался как строковые данные.
@@ -239,4 +240,6 @@ def process_intgen_data(intgen_dir_path):
                                         if re.match(r'rs\d+$', part_row[0]) != None and part_row[5].find('MULTI_ALLELIC') == -1:
                                                 intgen_vcfdb_opened[part_row[0]] = compress_line(line)
                                                 
+                print(f'({dbm.whichdb(intgen_vcfdb_path)})\n')
+                
         return intgen_sampjson_path, intgen_vcfbase_paths
