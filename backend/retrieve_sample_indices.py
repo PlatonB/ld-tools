@@ -1,8 +1,8 @@
-__version__ = 'V1.1'
+__version__ = 'V1.2'
 
-import json, dbm, gzip, sys
+import json, plyvel, gzip, sys
 
-def retrieve_sample_indices(intgen_sampjson_path, populations, genders, any_intgen_vcfdb_path):
+def retrieve_sample_indices(intgen_sampjson_path, populations, genders, intgen_vcfdb_path):
         '''
         Получение сэмплов, соответствующих заданным популяциям и полам.
         '''
@@ -12,15 +12,15 @@ def retrieve_sample_indices(intgen_sampjson_path, populations, genders, any_intg
         with open(intgen_sampjson_path) as intgen_sampjson_opened:
                 intgen_sampdict = json.load(intgen_sampjson_opened)
                 
-        #Во всех VCF-таблицах 1000
-        #Genomes одна и та же шапка.
-        #Открываем любой VCF-содержащий архив
-        #на чтение и достаём из таблицы шапку.
+        #Открываем ранее созданную
+        #1000 Genomes-БД и достаём оттуда
+        #шапку, содержащую названия сэмплов.
         #Разархивируем её, конвертируем
         #в Юникод и преобразуем в список.
-        with dbm.open(any_intgen_vcfdb_path) as any_intgen_vcfdb_opened:
-                header_row = gzip.decompress(any_intgen_vcfdb_opened['header_line']).decode('utf-8').split('\t')
-                
+        intgen_vcfdb_opened = plyvel.DB(intgen_vcfdb_path, create_if_missing=False)
+        header_row = gzip.decompress(intgen_vcfdb_opened.get('header_line'.encode())).decode('utf-8').split('\t')
+        intgen_vcfdb_opened.close()
+        
         #Пользователь может по ошибке указать популяцию дважды или
         #выбрать суперпопуляцию и принадлежащую ей субпопуляцию вместе.
         #В обоих случаях от дублей спасёт размещение сэмплов во множество.

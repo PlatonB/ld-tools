@@ -1,44 +1,41 @@
-__version__ = 'V3.2'
+__version__ = 'V4.0'
 
-import urllib.request, re, os, json, gzip, sys, dbm
+import urllib.request, re, os, json, gzip, sys, plyvel
 
-def download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path, index):
+def download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path):
         '''
         Скачивание данных 1000 Genomes.
         '''
         
         #Формирование ссылки на скачивание файла 1000
-        #Genomes из официального FTP этого проекта, абсолютного
-        #пути к этому файлу на компьютере пользователя и часть
-        #имени файла без расширения(-ий) (далее - название).
+        #Genomes из официального FTP этого проекта и абсолютного
+        #пути к этому файлу на компьютере пользователя.
         intgen_file_url = os.path.join(intgen_ftp_url, intgen_file_name)
         intgen_file_path = os.path.join(intgen_dir_path, intgen_file_name)
-        intgen_filebase_name = '.'.join(intgen_file_name.split('.')[:index])
         
         #Если 1000 Genomes-файл ещё не скачан, то
         #будут производиться попытки это сделать.
-        #В случае, если скачивание срывается из-за
-        #сбоев серверов IGSR, эта функция
-        #будет рекурсивно запускаться ещё
+        #В случае, если скачивание срывается
+        #из-за сбоев серверов IGSR, эта функция
+        #станет рекурсивно запускаться ещё
         #и ещё раз до достижения успеха.
-        #После скачивания, или если файл
-        #уже есть на диске, функция вернёт
-        #путь к нему, а также его название.
+        #После скачивания, или если файл уже
+        #есть на диске, функция вернёт путь к нему.
         if os.path.exists(intgen_file_path) == False:
                 print(f'{intgen_file_name} не найден. Загрузка...')
                 try:
                         urllib.request.urlretrieve(intgen_file_url, intgen_file_path)
-                        return intgen_file_path, intgen_filebase_name
+                        return intgen_file_path
                 except urllib.error.URLError:
                         print('Сбой соединения. Повторная попытка:')
-                        return download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path, index)
+                        return download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path)
         else:
                 print(f'{intgen_file_name} уже скачан')
-                return intgen_file_path, intgen_filebase_name
+                return intgen_file_path
         
 '''
-Отделение от строки символа переноса, её преобразование
-в байт-строку с последующей архивацией последней.
+Отделение от строки символа переноса, её
+преобразование в байт-строку, архивация последней.
 Искав модуль архивации, я остановился на gzip, и стал
 применять его со степенью компрессии по умолчанию (9).
 Экспериментальным путём определил, что именно такой
@@ -50,7 +47,7 @@ def process_intgen_data(intgen_dir_path):
         '''
         Формирование JSON-редакции панели сэмплов.
         Размещение данных 1000 Genomes по
-        SNPs в dbm-базы, из которых можно
+        SNPs в LevelDB-базу, из которой можно
         будет быстро извлекать строки
         по идентификаторам SNP.
         '''
@@ -89,22 +86,21 @@ def process_intgen_data(intgen_dir_path):
         #Получаем имя панели.
         intgen_samptxt_name = re.search(r'integrated_call_samples\S+?\.ALL\.panel(?=\\)', intgen_hg19_page).group()
         
-        #Если сохранённой панели нет, скачиваем её.
-        #Соответствующая функция также вернёт
-        #путь к панели и название таковой.
         print('')
-        intgen_samptxt_path, intgen_sampbase_name = download_intgen_file(intgen_hg19_url, intgen_samptxt_name, intgen_dir_path, -1)
         
-        #Собираем из названия и расширения имя
-        #будущей JSON-редакции панели и путь к ней.
-        intgen_sampjson_name = intgen_sampbase_name + '.json'
+        #Если сохранённой панели нет, скачиваем её.
+        #Соответствующая функция также вернёт путь к панели.
+        intgen_samptxt_path = download_intgen_file(intgen_hg19_url, intgen_samptxt_name, intgen_dir_path)
+        
+        #Собираем имя будущей JSON-редакции панели и путь к ней.
+        intgen_sampjson_name = '.'.join(intgen_samptxt_name.split('.')[:-1]) + '.json'
         intgen_sampjson_path = os.path.join(intgen_dir_path, intgen_sampjson_name)
         
         #JSON-панель создастся только, если она ещё не создана.
         if os.path.exists(intgen_sampjson_path) == True:
-                print(f'{intgen_sampjson_name} уже создан\n')
+                print(f'{intgen_sampjson_name} уже создан')
         else:
-                print(f'{intgen_sampjson_name} не найден. Создание...\n')
+                print(f'{intgen_sampjson_name} не найден. Создание...')
                 
                 #Открытие исходной (txt) версии панели на чтение.
                 with open(intgen_samptxt_path) as intgen_samptxt_opened:
@@ -147,99 +143,116 @@ def process_intgen_data(intgen_dir_path):
         #Данные по митохондриальной ДНК игнорируются.
         intgen_vcfgz_names = re.findall(r'ALL\.chr(?:\d{1,2}|X|Y)_GRCh38\.genotypes\.\S+?\.vcf\.gz(?=\\)', intgen_hg38_page)
         
-        #Списки для накопления путей к
-        #файлам 1000 Genomes без расширений.
-        #Расширения будут добавляться
-        #уже на уровне фронтендов.
-        intgen_vcfbase_paths = []
+        #Список для накопления путей к
+        #vcf.gz-архивам 1000 Genomes.
+        intgen_vcfgz_paths = []
         
-        #В рамках этого цикла будут создаваться и пополняться
-        #dbm-базы, основанные на данных из 1000 Genomes-VCFs.
-        #Попутно будут скачиваться tabix-индексы.
+        #Создание имени и пути для LevelDB-базы.
+        intgen_vcfdb_name = '1000_Genomes_ldb'
+        intgen_vcfdb_path = os.path.join(intgen_dir_path, intgen_vcfdb_name)
+
+        print('')
+        
+        #Проверка, нет ли у пользователя уже готовой БД.
+        #Если есть, то пропускаем процесс создания.
+        if os.path.exists(intgen_vcfdb_path) == True:
+                intgen_vcfdb_exists = True
+                print(f'{intgen_vcfdb_name} уже создана')
+        else:
+                intgen_vcfdb_exists = False
+                print(f'{intgen_vcfdb_name} не найдена. Будет создана')
+                intgen_vcfdb_opened = plyvel.DB(intgen_vcfdb_path, create_if_missing=True)
+                
+        #В рамках этого цикла будут скачиваться и/или
+        #создаваться все или только недостающие файлы.
+        #Это - 1000 Genomes-архивы и tbi-индексы к ним,
+        #а также LevelDB-база, которая должна в конечном
+        #итоге включать в себя все данные 1000 Genomes.
         for intgen_vcfgz_name in intgen_vcfgz_names:
+                
+                print('')
                 
                 #Формирование имени табикс-индекса.
                 #При обнаружениии отсутствия этого
                 #файла вызываемая функция скачает его.
                 intgen_vcftbi_name = intgen_vcfgz_name + '.tbi'
-                download_intgen_file(intgen_hg38_url, intgen_vcftbi_name, intgen_dir_path, -3)
+                download_intgen_file(intgen_hg38_url, intgen_vcftbi_name, intgen_dir_path)
                 
                 #Проверка на наличие архива 1000 Genomes.
-                #Если его нет - он скачается, а также будет
-                #возвращён путь к архиву без расширения.
+                #Если его нет - он скачается.
+                #В любом случае, будет возвращён путь к нему.
                 #Путь будет добавлен в список таких путей.
-                intgen_vcfgz_path, intgen_vcfbase_name = download_intgen_file(intgen_hg38_url, intgen_vcfgz_name, intgen_dir_path, -2)
-                intgen_vcfbase_paths.append(os.path.join(intgen_dir_path, intgen_vcfbase_name))
-                
-                #Конструирование имени и пути для далее создаваемой базы.
-                intgen_vcfdb_name = intgen_vcfbase_name + '.dbm'
-                intgen_vcfdb_path = os.path.join(intgen_dir_path, intgen_vcfdb_name)
-                
-                #Проверка, нет ли у пользователя уже готовой базы.
-                #Если есть, то пропускаем процесс создания.
-                if dbm.whichdb(intgen_vcfdb_path) != None:
-                        print(f'{intgen_vcfdb_name} уже создан')
-                        print(f'({dbm.whichdb(intgen_vcfdb_path)})\n')
+                intgen_vcfgz_path = download_intgen_file(intgen_hg38_url, intgen_vcfgz_name, intgen_dir_path)
+                intgen_vcfgz_paths.append(intgen_vcfgz_path)
+
+                #Если БД уже создана, то в данном
+                #цикле будет выполняться работа только
+                #с самими 1000 Genomes-архивами.
+                if intgen_vcfdb_exists == True:
                         continue
-                print(f'{intgen_vcfdb_name} не найден. Создание...')
                 
-                #Открываем архив 1000 Genomes на чтение таким образом, чтобы 
-                #находящийся внутри VCF считывался как строковые данные.
+                print(f'{intgen_vcfdb_name} пополняется...')
+
+                #Дальнейшие действия - для
+                #пополнения LevelDB-базы.
+                #Открываем архив 1000 Genomes
+                #на чтение таким образом, чтобы
+                #находящийся внутри него VCF
+                #считывался как строковые данные.
                 with gzip.open(intgen_vcfgz_path, mode='rt') as intgen_vcfgz_opened:
                         
-                        #Создание dbm-базы.
-                        with dbm.open(intgen_vcfdb_path, 'c') as intgen_vcfdb_opened:
-                                
-                                #Прочтение вхолостую строк метаинформации.
-                                #Получение шапки VCF-таблицы.
+                        #Прочтение вхолостую строк метаинформации.
+                        #Получение шапки VCF-таблицы.
+                        meta_line = intgen_vcfgz_opened.readline()
+                        while meta_line.startswith('##'):
                                 meta_line = intgen_vcfgz_opened.readline()
-                                while meta_line.startswith('##'):
-                                        meta_line = intgen_vcfgz_opened.readline()
-                                header_line = meta_line
-                                
-                                #Валидация первых 9 элементов шапки.
-                                if header_line.split('\t')[:9] != ['#CHROM',
-                                                                   'POS',
-                                                                   'ID',
-                                                                   'REF',
-                                                                   'ALT',
-                                                                   'QUAL',
-                                                                   'FILTER',
-                                                                   'INFO',
-                                                                   'FORMAT']:
-                                        print(f'''{intgen_vcfgz_name}, скорее всего, теперь другой структуры.
+                        header_line = meta_line
+                        
+                        #Валидация первых 9 элементов шапки.
+                        if header_line.split('\t')[:9] != ['#CHROM',
+                                                           'POS',
+                                                           'ID',
+                                                           'REF',
+                                                           'ALT',
+                                                           'QUAL',
+                                                           'FILTER',
+                                                           'INFO',
+                                                           'FORMAT']:
+                                print(f'''{intgen_vcfgz_name}, скорее всего, теперь другой структуры.
 Пожалуйста, сообщите об этом в Issues.
 Работа программы прервана.''')
-                                        sys.exit()
-                                        
-                                #Добавление шапки в базу.
-                                intgen_vcfdb_opened['header_line'] = compress_line(header_line)
+                                sys.exit()
                                 
-                                #Построчное прочтение основной части VCF-таблицы.
-                                for line in intgen_vcfgz_opened:
+                        #Если шапка не добавлена в базу - добавляем.
+                        if intgen_vcfdb_opened.get('header_line'.encode()) == None:
+                                intgen_vcfdb_opened.put('header_line'.encode(), compress_line(header_line))
+                                
+                        #Построчное прочтение основной части VCF-таблицы.
+                        for line in intgen_vcfgz_opened:
+                                
+                                #Создание списка, начинающегося
+                                #с идентификатора SNP и
+                                #заканчивающегося ячейкой info-столбца.
+                                #info-ячейка далее пригодится
+                                #для определения аллельности SNP.
+                                part_row = line.split('\t')[2:8]
+                                
+                                #Вместо refSNPID могут попадаться
+                                #другие типы идентификаторов.
+                                #Текущая версия LD-бэкенда
+                                #отправляет в базы только те
+                                #строки, которые включают refSNPID.
+                                #refSNPID становятся ключами,
+                                #а содержащие их строки (в
+                                #сжатом виде) - значениями.
+                                #Мультиаллельные SNP пока не
+                                #поддерживаются калькулятором LD,
+                                #поэтому соответствующие refSNPID
+                                #в базу добавляться не будут.
+                                if re.match(r'rs\d+$', part_row[0]) != None and part_row[5].find('MULTI_ALLELIC') == -1:
+                                        intgen_vcfdb_opened.put(part_row[0].encode(), compress_line(line))
                                         
-                                        #Создание списка, начинающегося
-                                        #с идентификатора SNP и
-                                        #заканчивающегося ячейкой info-столбца.
-                                        #info-ячейка далее пригодится
-                                        #для определение аллельности SNP.
-                                        part_row = line.split('\t')[2:8]
-                                        
-                                        #Вместо refSNPID могут попадаться
-                                        #другие типы идентификаторов.
-                                        #Текущая версия LD-бэкенда
-                                        #отправляет в базы только те
-                                        #строки, которые включают refSNPID.
-                                        #refSNPID становятся ключами,
-                                        #а содержащие их строки (в
-                                        #сжатом виде) - значениями.
-                                        #Мультиаллельные SNP пока не
-                                        #поддерживаются калькулятором LD,
-                                        #поэтому соответствующие refSNPID
-                                        #в базу добавляться не будут.
-                                        if re.match(r'rs\d+$', part_row[0]) != None and part_row[5].find('MULTI_ALLELIC') == -1:
-                                                intgen_vcfdb_opened[part_row[0]] = compress_line(line)
-                                                
-                print(f'({dbm.whichdb(intgen_vcfdb_path)})\n')
+        if intgen_vcfdb_exists == False:
+                intgen_vcfdb_opened.close()
                 
-        return intgen_sampjson_path, intgen_vcfbase_paths
+        return intgen_sampjson_path, intgen_vcfdb_path, intgen_vcfgz_paths
