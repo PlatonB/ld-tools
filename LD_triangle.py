@@ -1,17 +1,17 @@
-__version__ = 'V4.5'
+__version__ = 'V5.0'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V4.5.
+Версия: V5.0.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
 Обязательно! Установка модулей:
-sudo pip3 install plotly numpy
+sudo pip3 install plyvel plotly numpy
 
 Поддерживаемые исходные файлы - таблицы,
 содержащие столбец с набором refSNPIDs.
@@ -50,7 +50,7 @@ import sys
 #формирования питоновского кэша.
 sys.dont_write_bytecode = True
 
-import random, os, re, gzip, dbm, copy
+import os, re, gzip, plyvel, copy
 from backend.prepare_intgen_data import process_intgen_data
 from backend.retrieve_sample_indices import retrieve_sample_indices
 from backend.ld_calc import ld_calc
@@ -163,18 +163,15 @@ elif ld_measure != 'r_square' and ld_measure != 'd_prime':
         print(f'{ld_measure} - недопустимая опция')
         sys.exit()
         
-#Вызов функции, которая скачает заархивированные
-#VCF и панель сэмплов проекта 1000 Genomes,
-#если они ещё не скачаны, а также разместит
-#строки изо всех VCF в похромосомные dbm-базы.
-#Каждая dbm-база данных (далее - база) будет
-#состоять из ключей - refSNPID определённой хромосомы,
+#Вызов функции, которая, во-первых, скачает
+#заархивированные VCF и панель сэмплов проекта
+#1000 Genomes, если они ещё не скачаны, во-вторых,
+#сконвертирует панель в JSON, а данные изо
+#всех VCF разместит в единую LevelDB-базу.
+#LevelDB-база данных (далее - база) будет
+#состоять из ключей - ID снипов всех хромосом,
 #и значений - сжатых строк упомянутых VCF.
-#Функция не только скачивает данные, но и
-#возвращает абсолютные пути: без расширений -
-#к vcf.gz-архивам (они же - к dbm-базам),
-#а с расширением - к панели сэмплов.
-intgen_sampjson_path, intgen_vcfbase_paths = process_intgen_data(intgen_dir_path)
+intgen_sampjson_path, intgen_vcfdb_path = process_intgen_data(intgen_dir_path)[:2]
 
 #Вызов функции, производящей отбор
 #сэмплов, относящихся к указанным
@@ -183,7 +180,10 @@ intgen_sampjson_path, intgen_vcfbase_paths = process_intgen_data(intgen_dir_path
 sample_indices = retrieve_sample_indices(intgen_sampjson_path,
                                          populations,
                                          genders,
-                                         random.choice(intgen_vcfbase_paths) + '.dbm')
+                                         intgen_vcfdb_path)
+
+#Открытие базы.
+intgen_vcfdb_opened = plyvel.DB(intgen_vcfdb_path, create_if_missing=False)
 
 ##Работа с исходными файлами, создание конечных папок.
 
@@ -236,57 +236,47 @@ for src_file_name in src_file_names:
         ##Распределение по хромосомам пользовательских refSNPIDs.
         
         #В этот словарь будут накапливаться преобразованные в списки
-        #refSNPID-содержащие строки базы, распределяясь по разным
+        #refSNPID-содержащие строки из базы, распределяясь по разным
         #элементам словаря на основе принадлежности SNP хромосомам.
         rows_by_chrs = {}
         
         #Перебор избавленных от повторов пользовательских refSNPID.
         for rs_id in rs_ids:
                 
-                #Перебор путей к 1000 Genomes-файлам без расширений.
-                for intgen_vcfbase_path in intgen_vcfbase_paths:
-                        
-                        #К этим путям добавляется
-                        #расширение dbm, чтобы можно
-                        #было обращаться к базам.
-                        #Открытие каждой базы на чтение.
-                        with dbm.open(intgen_vcfbase_path + '.dbm') as intgen_vcfdb_opened:
-                                
-                                #Попытка извлечения из очередной базы сжатой строки,
-                                #соответствующей текущему пользовательскому refSNPID.
-                                #Декомпрессия результата, превращение из
-                                #байт-строки в обычную и преобразование в список.
-                                #Если refSNPID в базе нет, то вместо сжатой строки вернётся None.
-                                #В результате разархивации None выйдет пустая байтовая строка.
-                                #После её конвертаций, упомянутых выше, сформируется список
-                                #с обычной пустой строкой в качестве единственного элемента.
-                                row = gzip.decompress(intgen_vcfdb_opened.get(rs_id)).decode('utf-8').split('\t')
-                                
-                                #Если содержимое списка получилось
-                                #иное, нежели пустая строка, значит
-                                #refSNPID в одной из баз нашёлся.
-                                #Прерываем поиск.
-                                if row != ['']:
-                                        break
-                                
+                #Попытка извлечения из базы сжатой строки,
+                #соответствующей текущему пользовательскому refSNPID.
+                #Декомпрессия результата, превращение из
+                #байт-строки в обычную и преобразование в список.
+                #Если refSNPID в базе нет, то вместо сжатой строки вернётся None.
+                #В результате разархивации None выйдет пустая байтовая строка.
+                #После её конвертаций, упомянутых выше, сформируется список
+                #с обычной пустой строкой в качестве единственного элемента.
+                row = gzip.decompress(intgen_vcfdb_opened.get(rs_id.encode())).decode('utf-8').split('\t')
+                
                 #Если refSNPID из файла
                 #пользователя не обнаружился
-                #в базах, значит он - невалидный.
+                #в базе, значит он - невалидный.
                 #В матрицу он допущен не будет.
                 #Одна из вероятных причин - в том,
                 #что именуемый им SNP - не биаллельный.
-                else:
+                #Переходим к следующему refSNPID.
+                if row == ['']:
                         print(f'\t{rs_id} - невалидный refSNPID (возможно, ID мультиаллельного SNP). В матрицу не пойдёт')
                         continue
-                
+
+                #refSNPID в базе нашёлся.
                 #Извлечение из refSNPID-содержащего списка
                 #номера хромосомы соответствующего SNP.
                 chr_num = row[0]
                 
-                #Ключами ранее созданного словаря будут номера хромосом, а значениями -
-                #двумерные массивы, каждый элемент которых - refSNPID-содержащий список.
-                #Если очередной такой список относится к хромосоме, которая ранее не
-                #добавлялась, то создаётся новая пара ключ-значение (хромосома-пустой список).
+                #Ключами ранее созданного словаря
+                #будут номера хромосом, а значениями -
+                #двумерные массивы, каждый элемент
+                #которых - refSNPID-содержащий список.
+                #Если очередной такой список относится
+                #к хромосоме, которая ранее не
+                #добавлялась, то создаётся новая пара
+                #ключ-значение (хромосома-пустой список).
                 if chr_num not in rows_by_chrs:
                         rows_by_chrs[chr_num] = []
                         
@@ -534,3 +524,5 @@ gends: {" ".join(genders)}
                         #Построение диаграммы и её сохранение в HTML.
                         html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_{ld_measure[0]}_diag.html'
                         py.offline.plot(ld_heatmap, filename=html_file_path, auto_open=False)
+                        
+intgen_vcfdb_opened.close()
