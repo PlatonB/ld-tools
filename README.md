@@ -34,7 +34,7 @@ sudo pip3 install plyvel pysam plotly numpy
 #### Windows.
 В Windows пока не работает `pysam`, поэтому запускать удастся только LD_triangle.
 ```
-sudo pip3 install plyvel plotly numpy
+pip3 install plyvel plotly numpy
 ```
 
 ## Запуск.
