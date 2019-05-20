@@ -22,18 +22,19 @@ Clone or download
 5. Создайте папку для данных из 1000 Genomes.
 
 ### Установка сторонних Python-модулей.
+- Для всех компонентов потребуется `plyvel` (Python-обёртка к LevelDB).
 - Для LD_area — компонента, отвечающего за поиск SNPs в LD с запрашиваемыми — понадобится `pysam` (Python-обёртка к Samtools).
 - Для LD_triangle — компонента построения LD-матриц — нужны будут `plotly` (библиотека визуализации) и `numpy` (математический пакет в качестве обязательной зависимости для plotly).
 
 #### [Linux](https://elementary.io/ru/).
 ```
-sudo pip3 install pysam plotly numpy
+sudo pip3 install plyvel pysam plotly numpy
 ```
 
 #### Windows.
 В Windows пока не работает `pysam`, поэтому запускать удастся только LD_triangle.
 ```
-sudo pip3 install plotly numpy
+sudo pip3 install plyvel plotly numpy
 ```
 
 ## Запуск.
