@@ -1,4 +1,4 @@
-__version__ = 'V6.0'
+__version__ = 'V6.1'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V6.0.
+Версия: V6.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -224,7 +224,7 @@ for src_file_name in src_file_names:
                         if query_snp_row == ['']:
                                 if verbose == 'yes' or verbose == 'y':
                                         print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
-                                        continue
+                                continue
                                 
                         #Получение номера хромосомы и позиции запрашиваемого SNP.
                         chr_num, query_snp_pos = query_snp_row[0], int(query_snp_row[1])
