@@ -69,6 +69,9 @@ pip3 install plyvel plotly numpy
 
 - Не возникает конфликт, если на вход подаются SNP разных хромосом: для каждой хромосомы создастся отдельная LD-матрица.
 - Возможность обнулить те значения LD, которые ниже определённого порога, чтобы при рассмотрении матрицы было проще сосредоточиться на наиболее сильно сцепленных парах.
+![Пример диаграммы без фильтрации](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/LD_triangle_full_heatmap.png)
+![Пример диаграммы с r2 >= 0.9](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/LD_triangle_filtered_heatmap.png)
+
 - Высокоинформативные всплывающие лейблы тепловых карт.
 ![Пример ховертекста](https://raw.githubusercontent.com/PlatonB/ld-tools/master/LD_triangle_heatmap_hovertext.png)
 
