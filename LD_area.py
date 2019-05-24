@@ -1,4 +1,4 @@
-__version__ = 'V6.1'
+__version__ = 'V6.2'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V6.1.
+Версия: V6.2.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -226,8 +226,13 @@ for src_file_name in src_file_names:
                                         print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
                                 continue
                                 
-                        #Получение номера хромосомы и позиции запрашиваемого SNP.
-                        chr_num, query_snp_pos = query_snp_row[0], int(query_snp_row[1])
+                        #Получение номера хромосомы запрашиваемого и находимых
+                        #SNP, а также основных характеристик запрашиваемого.
+                        chr_num, query_snp_pos, query_snp_ref, query_snp_alt, query_snp_type = query_snp_row[0], \
+                                                                                               int(query_snp_row[1]), \
+                                                                                               query_snp_row[3], \
+                                                                                               query_snp_row[4], \
+                                                                                               re.search(r'(?<=VT=)\w+?\b', query_snp_row[7]).group()
                         
                         #Путь к хромосомной подпапке, имя
                         #конечного файла и путь к нему.
@@ -297,15 +302,17 @@ for src_file_name in src_file_names:
                                                         #в строку, а её - в список.
                                                         oppos_snp_row = str(rec).split('\n')[0].split('\t')
                                                         
-                                                        #Получение из этого списка таких важных
-                                                        #элементов, как позиция, идентификатор
-                                                        #и info-ячейка кандидатного SNP.
-                                                        #В последней из перечисленных может
-                                                        #встречаться флаг MULTI_ALLELIC, позволяющий
-                                                        #идентифицировать не-биаллельные SNP.
-                                                        oppos_snp_pos, oppos_rs_id, oppos_snp_info = int(oppos_snp_row[1]), \
-                                                                                                     oppos_snp_row[2], \
-                                                                                                     oppos_snp_row[7]
+                                                        #Получение из этого списка базовых
+                                                        #аннотаций и info-ячейки кандидатного SNP.
+                                                        #В последней из упомянутых обязательно
+                                                        #присутствует уточнённый тип мутации, а
+                                                        #также может встречаться флаг MULTI_ALLELIC,
+                                                        #позволяющий идентифицировать не-биаллельные SNP.
+                                                        oppos_snp_pos, oppos_rs_id, oppos_snp_ref, oppos_snp_alt, oppos_snp_info = int(oppos_snp_row[1]), \
+                                                                                                                                   oppos_snp_row[2], \
+                                                                                                                                   oppos_snp_row[3], \
+                                                                                                                                   oppos_snp_row[4], \
+                                                                                                                                   oppos_snp_row[7]
                                                         
                                                         #Кандидатный SNP имеет шанс войти в конечный
                                                         #список при соответствии нескольким критериям:
@@ -331,8 +338,9 @@ for src_file_name in src_file_names:
                                                                 #Добавление в конечный список очередного элемента.
                                                                 #Что это будет за элемент - зависит от решения
                                                                 #пользователя, в каком виде выводить результаты.
-                                                                #Если конечный формат - JSON, то в список пойдёт словарь
-                                                                #с позицией, ID и частотой альтернативного аллеля (AF)
+                                                                #Если конечный формат - JSON, то в список пойдёт
+                                                                #словарь с позицией, ID, обоими сиквенсами, точным
+                                                                #типом мутации и частотой альтернативного аллеля (AF)
                                                                 #сцепленного SNP, а также со значениями LD и физическим
                                                                 #расстоянием между запрашиваемым и сцепленным SNP.
                                                                 #Если пользователь предпочёл самый минималистичный вывод,
@@ -340,6 +348,9 @@ for src_file_name in src_file_names:
                                                                 if trg_file_type == 'json':
                                                                         linked_snps.append({'lnkd.hg38_pos': oppos_snp_pos,
                                                                                             'lnkd.rsID': oppos_rs_id,
+                                                                                            'lnkd.ref': oppos_snp_ref,
+                                                                                            'lnkd.alt': oppos_snp_alt,
+                                                                                            'lnkd.type': re.search(r'(?<=VT=)\w+?\b', oppos_snp_info).group(),
                                                                                             'lnkd.alt_freq': trg_vals['snp_2_alt_freq'],
                                                                                             "r2": trg_vals['r_square'],
                                                                                             "D'": trg_vals['d_prime'],
@@ -362,26 +373,25 @@ for src_file_name in src_file_names:
                                                                 os.mkdir(trg_dir_path)
                                                         os.mkdir(trg_chrdir_path)
                                                         
-                                                #Если файлу с результатами
-                                                #быть, конечный список дополнится
-                                                #первым элементом, содержащим
-                                                #номер хромосомы, позицию,
-                                                #ID и частоту альтернативного
-                                                #аллеля запрашиваемого SNP,
-                                                #а также параметры запроса.
+                                                #Если файлу с результатами быть, конечный
+                                                #список дополнится первым элементом,
+                                                #содержащим номер хромосомы, позицию, ID,
+                                                #сиквенсы, конкретизированный тип и частоту
+                                                #альтернативного аллеля запрашиваемого
+                                                #SNP, а также параметры запроса.
                                                 #AF запрашиваемого SNP возвращается
                                                 #при каждом вызове функции рассчёта
-                                                #LD, поэтому её можно взять из
-                                                #словаря, получившегося при
-                                                #последнем таком рассчёте.
-                                                #Для начала готовится "сырой"
-                                                #вариант первого элемента,
-                                                #представляющий собой два
-                                                #списка: отдельно названия и
-                                                #значения всех характеристик.
+                                                #LD, поэтому её можно взять из словаря,
+                                                #получившегося при последнем таком рассчёте.
+                                                #Для начала готовится "сырой" вариант первого
+                                                #элемента, представляющий собой два списка:
+                                                #отдельно названия и значения всех характеристик.
                                                 header_keys, header_vals = ['chr',
                                                                             'quer.hg38_pos',
                                                                             'quer.rsID',
+                                                                            'quer.ref',
+                                                                            'quer.alt',
+                                                                            'quer.type',
                                                                             'quer.alt_freq',
                                                                             'each_flank',
                                                                             f'{thres_ld_measure}_thres',
@@ -389,6 +399,9 @@ for src_file_name in src_file_names:
                                                                             'gends'], [int(chr_num),
                                                                                        query_snp_pos,
                                                                                        query_rs_id,
+                                                                                       query_snp_ref,
+                                                                                       query_snp_alt,
+                                                                                       query_snp_type,
                                                                                        trg_vals['snp_1_alt_freq'],
                                                                                        flank_size,
                                                                                        thres_ld_value,
