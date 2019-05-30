@@ -1,4 +1,4 @@
-__version__ = 'V6.2'
+__version__ = 'V7.0'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V6.2.
+Версия: V7.0.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -23,17 +23,6 @@ sudo pip3 install plyvel pysam
 диалога, вам непонятны - пишите, пожалуйста, в Issues.
 ''')
 
-def check_input(var):
-        '''
-        Проверка, правильно ли пользователь ответил на
-        запрос, требующий подтверждения или отрицания.
-        В случае ошибки работа программы завершится.
-        '''
-        if var != 'yes' and var != 'y' and var != 'no' \
-           and var != 'n' and var != '':
-                print(f'{var} - недопустимая опция')
-                sys.exit()
-                
 def join_header_element(header_key, header_val):
         '''
         Конечные не-JSON-файлы будут начинаться
@@ -93,10 +82,10 @@ if genders == ['m']:
         genders = ['male']
 elif genders == ['f']:
         genders = ['female']
-elif genders == [] or genders == ['both']:
+elif genders in [[], ['both']]:
         genders = ['male', 'female']
-elif genders != ['male'] and genders != ['female']:
-        print(f'{genders[0]} - недопустимая опция')
+elif genders not in [['male'], ['female']]:
+        print(f'{" ".join(genders)} - недопустимая опция')
         sys.exit()
         
 flank_size = input('''\nРазмер *каждого* из фланков, в пределах
@@ -114,7 +103,7 @@ if thres_ld_measure == 'r':
         thres_ld_measure = 'r_square'
 elif thres_ld_measure == 'd':
         thres_ld_measure = 'd_prime'
-elif thres_ld_measure != 'r_square' and thres_ld_measure != 'd_prime':
+elif thres_ld_measure not in ['r_square', 'd_prime']:
         print(f'{thres_ld_measure} - недопустимая опция')
         sys.exit()
         
@@ -122,23 +111,26 @@ thres_ld_value = float(input(f'\n{thres_ld_measure} ≥ '))
 
 trg_file_type = input('''\nФормат конечных файлов
 (игнорирование ввода ==> json)
-[json(|j|<enter>)|rsids(|r)]: ''')
-if trg_file_type != 'json' and trg_file_type != 'j' and trg_file_type != 'rsids' \
-   and trg_file_type != 'r' and trg_file_type != '':
-        print(f'{trg_file_type} - недопустимая опция')
-        sys.exit()
-elif trg_file_type == 'j' or trg_file_type == '':
+[json(|j|<enter>)|tsv(|t)|rsids(|r)]: ''')
+if trg_file_type in ['j', '']:
         trg_file_type = 'json'
+elif trg_file_type == 't':
+        trg_file_type = 'tsv'
 elif trg_file_type == 'r':
         trg_file_type = 'rsids'
+elif trg_file_type not in ['json', 'tsv', 'rsids']:
+        print(f'{trg_file_type} - недопустимая опция')
+        sys.exit()
         
 verbose = input('''\nВыводить подробную информацию о ходе работы?
 (не рекомендуется, если набор
 исходных данных очень большой)
 (игнорирование ввода ==> не выводить)
 [yes(|y)|no(|n|<enter>)]: ''')
-check_input(verbose)
-
+if verbose not in ['yes', 'y', 'no', 'n', '']:
+        print(f'{verbose} - недопустимая опция')
+        sys.exit()
+        
 #Вызов функции, которая, во-первых, скачает
 #заархивированные VCF и панель сэмплов проекта
 #1000 Genomes, если они ещё не скачаны, во-вторых,
@@ -192,12 +184,15 @@ for src_file_name in src_file_names:
                         except AttributeError:
                                 continue
                         
-                        if verbose == 'yes' or verbose == 'y':
+                        if verbose in ['yes', 'y']:
                                 print(f'\n{query_rs_id}...')
                                 
                         #Список, в который будут помещаться,
                         #как минимум, идентификаторы SNP,
-                        #сцепленных с запрашиваемым.
+                        #сцепленных с запрашиваемым,
+                        #и объект-предшественник
+                        #стартового элемента (словаря
+                        #или хэдера с метаинформацией).
                         #Туда также могут попадать
                         #различные характеристики SNPs.
                         #Содержимое списка будет зависить
@@ -222,17 +217,14 @@ for src_file_name in src_file_names:
                         #что именуемый им SNP - не биаллельный.
                         #Переходим к следующей строке.
                         if query_snp_row == ['']:
-                                if verbose == 'yes' or verbose == 'y':
+                                if verbose in ['yes', 'y']:
                                         print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
                                 continue
                                 
-                        #Получение номера хромосомы запрашиваемого и находимых
-                        #SNP, а также основных характеристик запрашиваемого.
-                        chr_num, query_snp_pos, query_snp_ref, query_snp_alt, query_snp_type = query_snp_row[0], \
-                                                                                               int(query_snp_row[1]), \
-                                                                                               query_snp_row[3], \
-                                                                                               query_snp_row[4], \
-                                                                                               re.search(r'(?<=VT=)\w+?\b', query_snp_row[7]).group()
+                        #Получение номера хромосомы запрашиваемого
+                        #и впоследствии находимых SNP.
+                        chr_num, query_snp_pos = query_snp_row[0], \
+                                                 int(query_snp_row[1])
                         
                         #Путь к хромосомной подпапке, имя
                         #конечного файла и путь к нему.
@@ -246,7 +238,7 @@ for src_file_name in src_file_names:
                         #сцепленного, то в файловой системе
                         #также никаких изменений не произойдёт.
                         trg_chrdir_path = os.path.join(trg_dir_path, chr_num)
-                        if trg_file_type == 'json':
+                        if trg_file_type in ['json', 'tsv']:
                                 ext = trg_file_type
                         else:
                                 ext = 'txt'
@@ -257,7 +249,7 @@ for src_file_name in src_file_names:
                         #повторно, то необходимо предотвратить
                         #поиск SNPs, с ним сцепленных.
                         if os.path.exists(trg_file_path) == True:
-                                if verbose == 'yes' or verbose == 'y':
+                                if verbose in ['yes', 'y']:
                                         print('\tуже был ранее обработан')
                                 continue
                         
@@ -302,17 +294,14 @@ for src_file_name in src_file_names:
                                                         #в строку, а её - в список.
                                                         oppos_snp_row = str(rec).split('\n')[0].split('\t')
                                                         
-                                                        #Получение из этого списка базовых
-                                                        #аннотаций и info-ячейки кандидатного SNP.
-                                                        #В последней из упомянутых обязательно
-                                                        #присутствует уточнённый тип мутации, а
-                                                        #также может встречаться флаг MULTI_ALLELIC,
-                                                        #позволяющий идентифицировать не-биаллельные SNP.
-                                                        oppos_snp_pos, oppos_rs_id, oppos_snp_ref, oppos_snp_alt, oppos_snp_info = int(oppos_snp_row[1]), \
-                                                                                                                                   oppos_snp_row[2], \
-                                                                                                                                   oppos_snp_row[3], \
-                                                                                                                                   oppos_snp_row[4], \
-                                                                                                                                   oppos_snp_row[7]
+                                                        #Получение из этого списка ID
+                                                        #и info-ячейки кандидатного SNP.
+                                                        #В последней обязательно присутствует
+                                                        #уточнённый тип мутации, а также может
+                                                        #встречаться флаг MULTI_ALLELIC, позволяющий
+                                                        #идентифицировать не-биаллельные SNP.
+                                                        oppos_rs_id, oppos_snp_info = oppos_snp_row[2], \
+                                                                                      oppos_snp_row[7]
                                                         
                                                         #Кандидатный SNP имеет шанс войти в конечный
                                                         #список при соответствии нескольким критериям:
@@ -338,25 +327,64 @@ for src_file_name in src_file_names:
                                                                 #Добавление в конечный список очередного элемента.
                                                                 #Что это будет за элемент - зависит от решения
                                                                 #пользователя, в каком виде выводить результаты.
-                                                                #Если конечный формат - JSON, то в список пойдёт
-                                                                #словарь с позицией, ID, обоими сиквенсами, точным
-                                                                #типом мутации и частотой альтернативного аллеля (AF)
-                                                                #сцепленного SNP, а также со значениями LD и физическим
-                                                                #расстоянием между запрашиваемым и сцепленным SNP.
-                                                                #Если пользователь предпочёл самый минималистичный вывод,
-                                                                #то этот список пополнится только ID сцепленного SNP.
-                                                                if trg_file_type == 'json':
-                                                                        linked_snps.append({'lnkd.hg38_pos': oppos_snp_pos,
-                                                                                            'lnkd.rsID': oppos_rs_id,
-                                                                                            'lnkd.ref': oppos_snp_ref,
-                                                                                            'lnkd.alt': oppos_snp_alt,
-                                                                                            'lnkd.type': re.search(r'(?<=VT=)\w+?\b', oppos_snp_info).group(),
-                                                                                            'lnkd.alt_freq': trg_vals['snp_2_alt_freq'],
-                                                                                            "r2": trg_vals['r_square'],
-                                                                                            "D'": trg_vals['d_prime'],
-                                                                                            'dist': oppos_snp_pos - query_snp_pos})
-                                                                elif trg_file_type == 'rsids':
+                                                                #Для начала проверим, не предпочёл ли пользователь
+                                                                #самый минималистичный вывод - набор refSNPID.
+                                                                #Если да, заселим в список текущий refSNPID и сразу
+                                                                #перейдём к строке со следующим кандидатным SNP.
+                                                                if trg_file_type == 'rsids':
                                                                         linked_snps.append(oppos_rs_id)
+                                                                        continue
+                                                                
+                                                                #Если конечный формат - JSON
+                                                                #или TSV, то тут всё сложнее.
+                                                                #Файлы таких форматов для того
+                                                                #и создаём, чтобы в них уместить
+                                                                #в структурированном виде
+                                                                #как можно больше информации.
+                                                                #Ради дальнейшего размещения
+                                                                #в конечный список соберём
+                                                                #позицию, ID, оба сиквенса,
+                                                                #точный тип мутации и частоту
+                                                                #альтернативного аллеля
+                                                                #(AF) текущего сцепленного
+                                                                #SNP, а также значения LD и
+                                                                #физическое расстояние между
+                                                                #этим SNP и запрашиваемым.
+                                                                oppos_snp_pos, oppos_snp_ref, oppos_snp_alt = int(oppos_snp_row[1]), \
+                                                                                                              oppos_snp_row[3], \
+                                                                                                              oppos_snp_row[4]
+                                                                oppos_snp_vals = [oppos_snp_pos,
+                                                                                  oppos_rs_id,
+                                                                                  oppos_snp_ref,
+                                                                                  oppos_snp_alt,
+                                                                                  re.search(r'(?<=VT=)\w+?\b', oppos_snp_info).group(),
+                                                                                  trg_vals['snp_2_alt_freq'],
+                                                                                  trg_vals['r_square'],
+                                                                                  trg_vals['d_prime'],
+                                                                                  oppos_snp_pos - query_snp_pos]
+                                                                
+                                                                #Если запланирован JSON-вывод,
+                                                                #для собранных значений составим
+                                                                #список соответствующих ключей.
+                                                                #Объединим ключи и значения в словарь
+                                                                #и добавим его в конечный список.
+                                                                if trg_file_type == 'json':
+                                                                        oppos_snp_keys = ['lnkd.hg38_pos',
+                                                                                          'lnkd.rsID',
+                                                                                          'lnkd.ref',
+                                                                                          'lnkd.alt',
+                                                                                          'lnkd.type',
+                                                                                          'lnkd.alt_freq',
+                                                                                          "r2",
+                                                                                          "D'",
+                                                                                          'dist']
+                                                                        linked_snps.append(dict(zip(oppos_snp_keys, oppos_snp_vals)))
+                                                                        
+                                                                #Если output - TSV - упомянутые значения
+                                                                #сконкатенируются в табличную строку,
+                                                                #которая поступит в конечный список.
+                                                                elif trg_file_type == 'tsv':
+                                                                        linked_snps.append('\t'.join([str(oppos_snp_val) for oppos_snp_val in oppos_snp_vals]))
                                                                         
                                         #Конечная папка, хромосомная подпапка и
                                         #файл с результатами могут быть созданы
@@ -373,65 +401,103 @@ for src_file_name in src_file_names:
                                                                 os.mkdir(trg_dir_path)
                                                         os.mkdir(trg_chrdir_path)
                                                         
-                                                #Если файлу с результатами быть, конечный
-                                                #список дополнится первым элементом,
-                                                #содержащим номер хромосомы, позицию, ID,
-                                                #сиквенсы, конкретизированный тип и частоту
-                                                #альтернативного аллеля запрашиваемого
-                                                #SNP, а также параметры запроса.
+                                                #Если файлу с результатами быть, подготовим
+                                                #список таких метазначений, как номер
+                                                #хромосомы и параметры запроса, плюс список
+                                                #названий каждого из них (далее - метаключей).
+                                                #Метазначения с метаключами в том или ином виде
+                                                #должны будут пойти в конечный файл любого формата.
+                                                common_ann_keys, common_ann_vals = ['chr',
+                                                                                    'each_flank',
+                                                                                    f'{thres_ld_measure}_thres',
+                                                                                    'pops',
+                                                                                    'gends'], [int(chr_num),
+                                                                                               flank_size,
+                                                                                               thres_ld_value,
+                                                                                               populations,
+                                                                                               genders]
+                                                
+                                                #Для дальнейшего размещения в JSON или TSV
+                                                #будут также собраны сведения о запрашиваемом
+                                                #SNP: позиция, ID, сиквенсы, конкретизированный
+                                                #тип, плюс частота альтернативного аллеля.
                                                 #AF запрашиваемого SNP возвращается
-                                                #при каждом вызове функции рассчёта
+                                                #при каждом вызове функции расчёта
                                                 #LD, поэтому её можно взять из словаря,
-                                                #получившегося при последнем таком рассчёте.
-                                                #Для начала готовится "сырой" вариант первого
-                                                #элемента, представляющий собой два списка:
-                                                #отдельно названия и значения всех характеристик.
-                                                header_keys, header_vals = ['chr',
-                                                                            'quer.hg38_pos',
-                                                                            'quer.rsID',
-                                                                            'quer.ref',
-                                                                            'quer.alt',
-                                                                            'quer.type',
-                                                                            'quer.alt_freq',
-                                                                            'each_flank',
-                                                                            f'{thres_ld_measure}_thres',
-                                                                            'pops',
-                                                                            'gends'], [int(chr_num),
-                                                                                       query_snp_pos,
+                                                #получившегося при последнем таком расчёте.
+                                                #Ещё что нужно для JSON и таблицы, так это
+                                                #ключи, представляющие собой названия
+                                                #характеристик того или иного SNP.
+                                                if trg_file_type in ['json', 'tsv']:
+                                                        query_snp_ref, query_snp_alt, query_snp_type = query_snp_row[3], \
+                                                                                                       query_snp_row[4], \
+                                                                                                       re.search(r'(?<=VT=)\w+?\b', query_snp_row[7]).group()
+                                                        query_ann_vals, header_keys = [query_snp_pos,
                                                                                        query_rs_id,
                                                                                        query_snp_ref,
                                                                                        query_snp_alt,
                                                                                        query_snp_type,
-                                                                                       trg_vals['snp_1_alt_freq'],
-                                                                                       flank_size,
-                                                                                       thres_ld_value,
-                                                                                       populations,
-                                                                                       genders]
-                                                
-                                                #"Сырые" списки собираются в словарь или
-                                                #строковый хэдер в зависимости от выбранной
-                                                #пользователем структуры output-файла.
-                                                if trg_file_type == 'json':
-                                                        linked_snps.insert(0, dict(zip(header_keys,
-                                                                                       header_vals)))
-                                                elif trg_file_type == 'rsids':
+                                                                                       trg_vals['snp_1_alt_freq']], ['hg38_pos',
+                                                                                                                     'rsID',
+                                                                                                                     'ref',
+                                                                                                                     'alt',
+                                                                                                                     'type',
+                                                                                                                     'alt_freq']
+                                                        
+                                                #В конечный список, собираемый
+                                                #под таблицу или refSNPIDs-файл,
+                                                #добавим хэдер сантакрузовского
+                                                #стиля, построив его из ранее
+                                                #описанных метаключей и метазначений.
+                                                if trg_file_type in ['tsv', 'rsids']:
                                                         linked_snps.insert(0, '#' + ' '.join(map(join_header_element,
-                                                                                                 header_keys,
-                                                                                                 header_vals)))
+                                                                                                 common_ann_keys,
+                                                                                                 common_ann_vals)))
                                                         
                                                 #Создание и открытие конечного файла на запись.
                                                 with open(trg_file_path, 'w') as trg_file_opened:
                                                         
-                                                        #Полученный ранее конечный список пропишется
-                                                        #либо в JSON-файл с формированием отступов,
-                                                        #либо построчно в обычный текстовый файл.
+                                                        #JSON: первый словарь получаем из уже
+                                                        #знакомых нам метаключей и метазначений,
+                                                        #второй - из ключей, к каждому из которых
+                                                        #добавляется приставка, указывающая на
+                                                        #призвание пары описывать запрашиваемый
+                                                        #SNP, и соответствующих значений.
+                                                        #Размещаем список словарей в файл,
+                                                        #автоматически проставляя отступы.
+                                                        #Телепортируемся через огромную толщу
+                                                        #кода к следующей строке исходного файла:).
                                                         if trg_file_type == 'json':
+                                                                linked_snps.insert(0, dict(zip(common_ann_keys,
+                                                                                               common_ann_vals)))
+                                                                linked_snps.insert(1, dict(zip([f'quer.{header_key}' for header_key in header_keys],
+                                                                                               query_ann_vals)))
                                                                 json.dump(linked_snps, trg_file_opened, indent=4)
+                                                                break
+                                                        
+                                                        #TSV: Собираем, во-первых, табулированную шапку
+                                                        #из названий сниповых характеристик, добавив
+                                                        #к ним элементы r2, D' и dist, а, во-вторых,
+                                                        #строку с характеристиками запрашиваемого SNP.
+                                                        elif trg_file_type == 'tsv':
+                                                                linked_snps.insert(1, '#' + '\t'.join(header_keys + ["r2",
+                                                                                                                     "D'",
+                                                                                                                     'dist']))
+                                                                linked_snps.insert(2, '\t'.join([str(query_ann_val) for query_ann_val in query_ann_vals] + ['quer'] * 3))
+                                                                
+                                                        #RefSNPIDs: дополняем конечный список
+                                                        #идентификатором запрашиваемого SNP.
                                                         elif trg_file_type == 'rsids':
-                                                                for line in linked_snps:
-                                                                        trg_file_opened.write(line + '\n')
-                                                                        
-                                        elif verbose == 'yes' or verbose == 'y':
+                                                                linked_snps.insert(1, query_rs_id)
+                                                                
+                                                        #Независимо от того, выбран табличный
+                                                        #формат или вывод одиночных refSNPID,
+                                                        #прописываем все собранные в конечный
+                                                        #список данные как обычные строки.
+                                                        for line in linked_snps:
+                                                                trg_file_opened.write(line + '\n')
+                                                                
+                                        elif verbose in ['yes', 'y']:
                                                 print(f'\t{thres_ld_measure} >= {thres_ld_value}: SNPs в LD не найдены')
                                                 
                                         break
