@@ -1,11 +1,11 @@
-__version__ = 'V5.0'
+__version__ = 'V5.1'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V5.0.
+Версия: V5.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -28,8 +28,7 @@ def check_input(var):
         запрос, требующий подтверждения или отрицания.
         В случае ошибки работа программы завершится.
         '''
-        if var != 'yes' and var != 'y' and var != 'no' \
-           and var != 'n' and var != '':
+        if var not in ['yes', 'y', 'no', 'n', '']:
                 print(f'{var} - недопустимая опция')
                 sys.exit()
                 
@@ -66,12 +65,8 @@ output = input('''\nВ каком виде выводить матрицы зн�
 неравновесия по сцеплению (далее - LD-матрицы)?
 (игнорирование ввода ==> в обоих)
 [table(|t)|heatmap(|h)|both(|<enter>)]: ''')
-if output != 'table' and output != 't' and output != 'heatmap' \
-   and output != 'h' and output != 'both' and output != '':
-        print(f'{output} - недопустимая опция')
-        sys.exit()
-        
-elif output == 'heatmap' or output == 'h' or output == 'both' or output == '':
+
+if output in ['heatmap', 'h', 'both', '']:
         texts = input('''\nВыводить на диаграмму текстовую информацию?
 (не рекомендуется, если строите матрицу > ~50x50 элементов; в любом
 случае данные будут появляться по наведению курсора на квадратик)
@@ -79,7 +74,7 @@ elif output == 'heatmap' or output == 'h' or output == 'both' or output == '':
 [yes(|y)|no(|n|<enter>)]: ''')
         check_input(texts)
         
-        if texts == 'yes' or texts == 'y':
+        if texts in ['yes', 'y']:
                 val_font_size = input('''\nРазмер шрифта значений LD в квадратиках
 (игнорирование ввода ==> значение по умолчанию)
 [default(|<enter>)|...|11|12|13|...]: ''')
@@ -103,6 +98,10 @@ elif output == 'heatmap' or output == 'h' or output == 'both' or output == '':
         if color_map == '':
                 color_map = 'Greens'
                 
+elif output not in ['table', 't']:
+        print(f'{output} - недопустимая опция')
+        sys.exit()
+        
 num_of_headers = input('''\nКоличество не обрабатываемых строк
 в начале каждой исходной таблицы
 (игнорирование ввода ==> хэдеров/шапок в таблицах нет)
@@ -127,10 +126,10 @@ if genders == ['m']:
         genders = ['male']
 elif genders == ['f']:
         genders = ['female']
-elif genders == [] or genders == ['both']:
+elif genders in [[], ['both']]:
         genders = ['male', 'female']
-elif genders != ['male'] and genders != ['female']:
-        print(f'{genders[0]} - недопустимая опция')
+elif genders not in [['male'], ['female']]:
+        print(f'{" ".join(genders)} - недопустимая опция')
         sys.exit()
         
 ld_filter = input('''\nОбнулять значения LD, если
@@ -140,14 +139,14 @@ ld_filter = input('''\nОбнулять значения LD, если
 [yes(|y)|no(|n|<enter>)]: ''')
 check_input(ld_filter)
 
-if ld_filter == 'yes' or ld_filter == 'y':
+if ld_filter in ['yes', 'y']:
         thres_ld_measure = input('''\nМера LD для выставления порога
 [r_square(|r)|d_prime(|d)]: ''')
         if thres_ld_measure == 'r':
                 thres_ld_measure = 'r_square'
         elif thres_ld_measure == 'd':
                 thres_ld_measure = 'd_prime'
-        elif thres_ld_measure != 'r_square' and thres_ld_measure != 'd_prime':
+        elif thres_ld_measure not in ['r_square', 'd_prime']:
                 print(f'{thres_ld_measure} - недопустимая опция')
                 sys.exit()
                 
@@ -159,7 +158,7 @@ if ld_measure == 'r':
         ld_measure = 'r_square'
 elif ld_measure == 'd':
         ld_measure = 'd_prime'
-elif ld_measure != 'r_square' and ld_measure != 'd_prime':
+elif ld_measure not in ['r_square', 'd_prime']:
         print(f'{ld_measure} - недопустимая опция')
         sys.exit()
         
@@ -397,7 +396,7 @@ gends: {" ".join(genders)}
                 ##Сохранение результатов.
                 
                 #Пользователь указал создавать текстовые версии LD-матриц.
-                if output == 'table' or output == 't' or output == 'both' or output == '':
+                if output in ['table', 't', 'both', '']:
                         
                         print(f'хромосома {chr_num}: сохранение текстовой LD-матрицы...')
                         
@@ -451,7 +450,7 @@ gends: {" ".join(genders)}
                         #значений и отсутствие цветовой шкалы.
                         #Объект дополняется словарём с настройками
                         #осей: для начала - запретом вывода лейблов.
-                        if texts == 'no' or texts == 'n' or texts == '':
+                        if texts in ['no', 'n', '']:
                                 trace = go.Heatmap(z=ld_two_dim,
                                                    hovertext=info_two_dim,
                                                    hoverinfo='text',
