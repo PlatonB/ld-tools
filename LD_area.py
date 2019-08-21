@@ -1,4 +1,4 @@
-__version__ = 'V7.0'
+__version__ = 'V7.1'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,12 +6,13 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V7.0.
+Версия: V7.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
-Обязательно! Установка модулей:
+Обязательно!
+Перед запуском программы нужно установить модули:
 sudo pip3 install plyvel pysam
 
 Поддерживаемые исходные файлы - таблицы,
@@ -411,7 +412,7 @@ for src_file_name in src_file_names:
                                                                                     'each_flank',
                                                                                     f'{thres_ld_measure}_thres',
                                                                                     'pops',
-                                                                                    'gends'], [int(chr_num),
+                                                                                    'gends'], [chr_num,
                                                                                                flank_size,
                                                                                                thres_ld_value,
                                                                                                populations,
