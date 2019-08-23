@@ -1,16 +1,17 @@
-__version__ = 'V5.1'
+__version__ = 'V5.2'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V5.1.
+Версия: V5.2.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
-Обязательно! Установка модулей:
+Обязательно!
+Перед запуском программы нужно установить модули:
 sudo pip3 install plyvel plotly numpy
 
 Поддерживаемые исходные файлы - таблицы,
@@ -361,18 +362,18 @@ for src_file_name in src_file_names:
                                         #массив дополнительной информации по каждой паре SNP.
                                         if 'info_two_dim' in locals():
                                                 info_two_dim[row_index][col_index] = f'''
-r2: {trg_vals["r_square"]},
-D': {trg_vals["d_prime"]},
-abs_dist: {abs(int(poss_srtd[col_index]) - int(poss_srtd[row_index]))} ▓
-chr: {chr_num},
-x.hg38_pos: {poss_srtd[col_index]},
-y.hg38_pos: {poss_srtd[row_index]} ▓
-x.rsID: {rs_ids_srtd[col_index]},
-y.rsID: {rs_ids_srtd[row_index]} ▓
-x.alt_freq: {trg_vals['snp_2_alt_freq']},
-y.alt_freq: {trg_vals['snp_1_alt_freq']} ▓
-pops: {" ".join(populations)},
-gends: {" ".join(genders)}
+r2: {trg_vals["r_square"]}<br>
+D': {trg_vals["d_prime"]}<br>
+abs_dist: {abs(int(poss_srtd[col_index]) - int(poss_srtd[row_index]))}<br><br>
+chr: {chr_num}<br>
+x.hg38_pos: {poss_srtd[col_index]}<br>
+y.hg38_pos: {poss_srtd[row_index]}<br><br>
+x.rsID: {rs_ids_srtd[col_index]}<br>
+y.rsID: {rs_ids_srtd[row_index]}<br><br>
+x.alt_freq: {trg_vals['snp_2_alt_freq']}<br>
+y.alt_freq: {trg_vals['snp_1_alt_freq']}<br><br>
+pops: {", ".join(populations)}<br>
+gends: {", ".join(genders)}
 '''
                                                 
                                         #Пользователь мог установить нижний порог LD.
@@ -432,8 +433,9 @@ gends: {" ".join(genders)}
                         
                         #Plotly позволяет строить тепловые карты
                         #как без надписей, так и с таковыми.
-                        #Под надписями подразумеваются значения LD в
-                        #квадратиках тепловой карты и лейблы осей X, Y.
+                        #Под надписями в рамках нашей задачи
+                        #подразумеваются значения LD в квадратиках
+                        #тепловой карты и refSNPID-лейблы осей X, Y.
                         #Допустим, пользователь предпочёл не выводить
                         #на диаграмму никаких текстовых данных.
                         #Тогда нужно будет создать обычную,
@@ -441,14 +443,16 @@ gends: {" ".join(genders)}
                         #и подавить размещение лейблов осей.
                         #Для построения объекта тепловой карты,
                         #в квадратиках которой не будет текста,
-                        #программа использует функцию Heatmap.
-                        #Функция принимает посчитанные LD и другую
-                        #информацию по парам SNPs, заданную пользователем
-                        #цветовую схему и ряд константных аргументов:
-                        #наличие расстояния между квадратиками,
+                        #программа использует класс Heatmap.
+                        #Класс принимает посчитанные LD и другую
+                        #информацию по парам SNPs, заданную
+                        #пользователем цветовую схему и ряд
+                        #константных аргументов: наличие
+                        #расстояния между квадратиками,
                         #потемнение клеточек по мере увеличения
                         #значений и отсутствие цветовой шкалы.
-                        #Объект дополняется словарём с настройками
+                        #Объект диаграммы дополняется словареподобным
+                        #объектом класса Layout с настройками
                         #осей: для начала - запретом вывода лейблов.
                         if texts in ['no', 'n', '']:
                                 trace = go.Heatmap(z=ld_two_dim,
@@ -459,16 +463,16 @@ gends: {" ".join(genders)}
                                                    colorscale=color_map,
                                                    reversescale=True,
                                                    showscale=False)
-                                layout = {'xaxis': {'showticklabels': False},
-                                          'yaxis': {'showticklabels': False}}
-                                ld_heatmap = {'data': [trace],
-                                              'layout': layout}
+                                layout = go.Layout(xaxis={'showticklabels': False},
+                                                   yaxis={'showticklabels': False})
+                                ld_heatmap = go.Figure(data=[trace],
+                                                       layout=layout)
                                 
                         #Пользователь дал добро выводить на диаграмму надписи.
                         else:
                                 
-                                #Для создания тепловых карт со значениями
-                                #в квадратиках (аннотированных) Plotly предоставляет
+                                #Для создания тепловых карт со значениями в
+                                #квадратиках (аннотированных) Plotly предоставляет
                                 #высокоуровневую функцию create_annotated_heatmap.
                                 #Объект аннотированной тепловой карты представляет
                                 #собой структуру со свойствами словаря, в которую
@@ -522,6 +526,6 @@ gends: {" ".join(genders)}
                         
                         #Построение диаграммы и её сохранение в HTML.
                         html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_{ld_measure[0]}_diag.html'
-                        py.offline.plot(ld_heatmap, filename=html_file_path, auto_open=False)
+                        ld_heatmap.write_html(html_file_path)
                         
 intgen_vcfdb_opened.close()
