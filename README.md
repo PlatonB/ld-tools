@@ -75,6 +75,11 @@ sudo pip3 install plyvel pysam plotly numpy
 
 - (ИМХО!) Более наглядные и симпатичные диаграммы (можете оспорить это в [Issues](https://github.com/PlatonB/ld-tools/issues):smile:).
 
+## Подходящие цветовые палитры.
+Подобрал такие палитры Plotly, с которыми LD-карты не будут смотреться вырвиглазно.
+
+_algae, amp, blues, blugrn, bluyl, brwnyl, bugn, bupu, burg, burgyl, darkmint, deep, dense, emrld, gnbu, greens, greys, magenta, matter, mint, oranges, orrd, oryel, peach, pinkyl, pubu, pubugn, purd, purp, purples, purpor, rdpu, redor, reds, speed, sunset, sunsetdark, teal, tealgrn, tempo, turbid, ylgn, ylgnbu, ylorbr, ylorrd_
+
 ## Результаты.
 На пересечении строки с одним SNP и столбца с другим отображается значение LD. Оно может быть представлено в виде вещественного числа, степени насыщенности окраски квадратика, либо сочетанием одного и другого.
 ![Пример тепловой карты с указанием закономерностей физического расстояния](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/LD_triangle_annotated_heatmap_with_explanations.png)
