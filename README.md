@@ -115,9 +115,9 @@ for ann_num in range(len(ld_heatmap.layout.annotations)):
 	ld_heatmap.layout.annotations[ann_num].font.size = 10
 ```
 
-После каждого внесённого изменения предпросматривайте тепловую карту (при этом будет сохраняться только временный файл).
+После каждого внесённого изменения предпросматривайте тепловую карту.
 ```
-py.offline.plot(ld_heatmap)
+ld_heatmap.show()
 ```
 
 Если размер матрицы ещё больше, то могут сливаться лейблы осей. Компактизируем их.
@@ -146,25 +146,25 @@ ld_heatmap['layout']['yaxis']['showticklabels'] = False
 
 Опять что-то кажется кривым? Продолжайте описанные выше эксперименты с параметрами. Если же проделанная работа устраивает, можете сохранить обновлённую диаграмму в ту папку, путь к которой указывали в рамках пользовательского диалога. Учтите, что старая диаграмма при этом заменится на новую.
 ```
-py.offline.plot(ld_heatmap, filename = html_file_path, auto_open=False)
+ld_heatmap.write_html(html_file_path)
 ```
 
 Может так сложиться, что ваши эксперименты зашли слишком далеко и нужно вернуть тепловой карте тот вид, который она имела непосредственно после завершения работы программы. Ну или вы хотите, стартуя с нуля, вновь кастомизировать её до неузнаваемости. Тогда создадим объект диаграммы заново.
 
 Объект аннотированной тепловой карты. Специальная функция из "фабрики фигур" Plotly сделает всю сложную низкоуровневую работу по построению этого объекта за нас.
 ```
-ld_heatmap = ff.create_annotated_heatmap(ld_two_dim, x=rs_ids_srtd, y=rs_ids_srtd, hovertext = info_two_dim, hoverinfo = 'text', xgap=1, ygap=1, colorscale=color_map, reversescale=True)
+ld_heatmap = ff.create_annotated_heatmap(ld_two_dim, x=rs_ids_srtd, y=rs_ids_srtd, hovertext=info_two_dim, hoverinfo='text', xgap=1, ygap=1, colorscale=color_pal)
 ```
 
-Объект обычной тепловой карты. Соберём его вручную. Должен получиться словарь, состоящий из двух словареподобных объектов: один — с данными и настройками их отображения (`trace`), другой — с настройками не связанных с данными элементов диаграммы (`layout`). В нашем случае trace будет содержать значения LD, соответствующие всплывающие аннотации и некоторые кастомизации дизайна, а layout — параметры осей.
+Объект обычной тепловой карты. Соберём его вручную. Должен получиться словареподобный объект, состоящий из двух объектов: один — с данными и настройками их отображения (`trace`), другой — с настройками не связанных с данными элементов диаграммы (`layout`). В нашем случае trace будет содержать значения LD, соответствующие всплывающие аннотации и некоторые кастомизации дизайна, а layout — параметры осей.
 ```
-trace = go.Heatmap(z=ld_two_dim, hovertext=info_two_dim, hoverinfo='text', xgap=1, ygap=1, colorscale=color_map, reversescale=True, showscale=False)
-```
-```
-layout = {'xaxis': {'showticklabels': False}, 'yaxis': {'showticklabels': False}}
+trace = go.Heatmap(z=ld_two_dim, hovertext=info_two_dim, hoverinfo='text', xgap=1, ygap=1, colorscale=color_pal, showscale=False)
 ```
 ```
-ld_heatmap = {'data': [trace], 'layout': layout}
+layout = go.Layout(xaxis={'showticklabels': False}, yaxis={'showticklabels': False})
+```
+```
+ld_heatmap = go.Figure(data=[trace], layout=layout)
 ```
 
 Перевернём тепловую карту по оси Y, чтобы она выглядела, как результат работы LDmatrix.
@@ -174,7 +174,7 @@ ld_heatmap['layout']['yaxis']['autorange'] = 'reversed'
 
 Мы вернули диаграмме дефолтный вид. Посмотрим, что получилось.
 ```
-py.offline.plot(ld_heatmap)
+ld_heatmap.show()
 ```
 
 Обычная тепловая карта:
