@@ -1,11 +1,11 @@
-__version__ = 'V5.2'
+__version__ = 'V5.3'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V5.2.
+Версия: V5.3.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -92,12 +92,12 @@ if output in ['heatmap', 'h', 'both', '']:
                 elif lab_font_size != 'default':
                         lab_font_size = int(lab_font_size)
                         
-        color_map = input('''\nЦветовая палитра тепловой карты
-(https://github.com/plotly/plotly.py/blob/bdafae81e747dfc11ea7c6c64fa9d09117aa1816/plotly/colors.py#L90)
+        color_pal = input('''\nЦветовая палитра тепловой карты
+(https://github.com/PlatonB/ld-tools#подходящие-цветовые-палитры)
 (игнорирование ввода ==> зелёные оттенки)
-[greens(|<enter>)|hot|earth|electric|...]: ''').capitalize()
-        if color_map == '':
-                color_map = 'Greens'
+[greens(|<enter>)|amp|tempo|brwnyl|turbid|...]: ''')
+        if color_pal == '':
+                color_pal = 'greens'
                 
 elif output not in ['table', 't']:
         print(f'{output} - недопустимая опция')
@@ -331,7 +331,7 @@ for src_file_name in src_file_names:
                 #В случае, если будет строиться диаграмма,
                 #такой же шаблон понадобится для создания
                 #матрицы сопутствующей информации.
-                if 'color_map' in locals():
+                if 'color_pal' in locals():
                         info_two_dim = copy.deepcopy(ld_two_dim)
                 
                 #Перебор чисел, которые будут представлять
@@ -412,7 +412,7 @@ gends: {", ".join(genders)}
                         tsv_file_name = f'{src_file_base}_chr{chr_num}_{ld_measure[0]}_tab.tsv'
                         with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
                                 tab = '\t'
-                                tsv_file_opened.write(f'#General\tinfo:\t{ld_measure}\tchr{chr_num}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
+                                tsv_file_opened.write(f'##General\tinfo:\t{ld_measure}\tchr{chr_num}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
                                 tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
                                 tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
                                 rs_id_index = 0
@@ -427,7 +427,7 @@ gends: {", ".join(genders)}
                 #должно стать одним из аргументов функции построения
                 #диаграммы, существует, то это означает, что
                 #пользователь предпочёл LD-матрицы визуализировать.
-                if 'color_map' in locals():
+                if 'color_pal' in locals():
                         
                         print(f'хромосома {chr_num}: визуализация LD-матрицы...')
                         
@@ -446,11 +446,9 @@ gends: {", ".join(genders)}
                         #программа использует класс Heatmap.
                         #Класс принимает посчитанные LD и другую
                         #информацию по парам SNPs, заданную
-                        #пользователем цветовую схему и ряд
-                        #константных аргументов: наличие
-                        #расстояния между квадратиками,
-                        #потемнение клеточек по мере увеличения
-                        #значений и отсутствие цветовой шкалы.
+                        #пользователем цветовую схему и два
+                        #константных аргумента: наличие расстояния
+                        #между квадратиками, отсутствие цветовой шкалы.
                         #Объект диаграммы дополняется словареподобным
                         #объектом класса Layout с настройками
                         #осей: для начала - запретом вывода лейблов.
@@ -460,8 +458,7 @@ gends: {", ".join(genders)}
                                                    hoverinfo='text',
                                                    xgap=1,
                                                    ygap=1,
-                                                   colorscale=color_map,
-                                                   reversescale=True,
+                                                   colorscale=color_pal,
                                                    showscale=False)
                                 layout = go.Layout(xaxis={'showticklabels': False},
                                                    yaxis={'showticklabels': False})
@@ -486,9 +483,8 @@ gends: {", ".join(genders)}
                                 #и дополнительной информацией по каждой паре SNPs.
                                 #Аргумент, который определяется на этапе интерактивного
                                 #диалога пользователем - цветовая схема тепловой карты.
-                                #Не изменяемые в рамках диалога аргументы: наличие
-                                #разделительных линий между квадратиками, более тёмная
-                                #заливка квадратиков при больших значениях в них.
+                                #Не изменяемый в рамках диалога аргумент - наличие
+                                #разделительных линий между квадратиками.
                                 #В create_annotated_heatmap по умолчанию
                                 #не допускается вывод цветовой шкалы.
                                 #Так и оставим ради экономии пространства.
@@ -499,12 +495,13 @@ gends: {", ".join(genders)}
                                                                          hoverinfo='text',
                                                                          xgap=1,
                                                                          ygap=1,
-                                                                         colorscale=color_map,
-                                                                         reversescale=True)
+                                                                         colorscale=color_pal)
                                 
-                                #Пользователь кастомизировал размер шрифта значений внутри квадратиков.
-                                #Тогда в каждый подсловарь структуры 'annotations' будет
-                                #добавлена пара ключ-значение с данным размером.
+                                #Пользователь кастомизировал размер
+                                #шрифта значений внутри квадратиков.
+                                #Тогда в каждый подсловарь структуры
+                                #'annotations' будет добавлена пара
+                                #ключ-значение с данным размером.
                                 if val_font_size != 'default':
                                         for ann_num in range(len(ld_heatmap['layout']['annotations'])):
                                                 ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = val_font_size
