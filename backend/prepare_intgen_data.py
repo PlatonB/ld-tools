@@ -1,16 +1,19 @@
-__version__ = 'V4.0'
+__version__ = 'V5.0'
 
 import urllib.request, re, os, json, gzip, sys, plyvel
 
-def download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path):
+def download_intgen_file(intgen_page_url, intgen_file_name, intgen_dir_path):
         '''
-        Скачивание данных 1000 Genomes.
+        Скачивание данных 1000 Genomes,
+        если они не были скачаны до этого.
+        Необходимо для дальнейшего функционирования
+        программы в отсутствие интернета.
         '''
         
-        #Формирование ссылки на скачивание файла 1000
-        #Genomes из официального FTP этого проекта и абсолютного
-        #пути к этому файлу на компьютере пользователя.
-        intgen_file_url = os.path.join(intgen_ftp_url, intgen_file_name)
+        #Формирование ссылки на скачивание файла 1000 Genomes
+        #из официального FTP этого проекта и абсолютного
+        #пути к данному файлу на компьютере пользователя.
+        intgen_file_url = os.path.join(intgen_page_url, intgen_file_name)
         intgen_file_path = os.path.join(intgen_dir_path, intgen_file_name)
         
         #Если 1000 Genomes-файл ещё не скачан, то
@@ -28,7 +31,7 @@ def download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path):
                         return intgen_file_path
                 except urllib.error.URLError:
                         print('Сбой соединения. Повторная попытка:')
-                        return download_intgen_file(intgen_ftp_url, intgen_file_name, intgen_dir_path)
+                        return download_intgen_file(intgen_page_url, intgen_file_name, intgen_dir_path)
         else:
                 print(f'{intgen_file_name} уже скачан')
                 return intgen_file_path
@@ -47,50 +50,35 @@ def process_intgen_data(intgen_dir_path):
         '''
         Формирование JSON-редакции панели сэмплов.
         Размещение данных 1000 Genomes по
-        SNPs в LevelDB-базу, из которой можно
-        будет быстро извлекать строки
-        по идентификаторам SNP.
+        SNPs в LevelDB-базу, из которой
+        можно будет быстро извлекать
+        строки по идентификаторам SNP.
         '''
         
-        #Если папка для 1000 Genomes-данных и
-        #соответствующих баз абсолютно пуста, то
-        #всё будет скачиваться и создаваться с нуля.
+        #Если папка для 1000 Genomes-архивов
+        #и базы данных абсолютно пуста, то всё
+        #будет скачиваться и создаваться с нуля.
         #Поскольку это - процесс долгий, то пользователю
         #будет показано соответствующее предупреждение.
         if os.listdir(intgen_dir_path) == []:
                 print('''\nДля рассчёта LD необходимы данные 1000 Genomes.
-Их загрузка и оптимизация могут занять сутки.''')
+Их загрузка и оптимизация могут занять сутки.\n''')
                 
-        #Захардкодим URLs тех каталогов FTP IGSR,
-        #где хостятся актуальные данные, необходимые
-        #для рассчёта LD (1000 Genomes Phase 3).
-        #В одном каталоге координаты соответствуют
-        #сборке GRCh37 (hg19), в другом - GRCh38 (hg38).
-        #Из первого нужно будет скачать текстовый файл
-        #с популяциями и сэмплами (далее - панель).
-        #Из второго - архивы 1000 Genomes и их индексы.
-        #В каждом архиве - VCF-таблица с данными по SNPs
-        #одной хромосомы: идентификатор снипа, некоторые
-        #его характеристики и набор фазированных генотипов.
-        intgen_hg19_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/'
-        intgen_hg38_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/'
-        
-        #Преобразуем страницы обоих каталогов в строки.
-        #Из этих строк можно будет извлекать
-        #регулярками имена нужных файлов.
-        with urllib.request.urlopen(intgen_hg19_url) as response:
-                intgen_hg19_page = str(response.read())
-        with urllib.request.urlopen(intgen_hg38_url) as response:
-                intgen_hg38_page = str(response.read())
-                
-        #Получаем имя панели.
-        intgen_samptxt_name = re.search(r'integrated_call_samples\S+?\.ALL\.panel(?=\\)', intgen_hg19_page).group()
-        
+        #Создаём переменную для
+        #ссылки на FTP-каталог,
+        #содержащий текстовый
+        #файл с популяциями и
+        #сэмплами (далее - панель).
+        #Другая переменная
+        #будет для имени панели.
+        intgen_hg19page_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/'
+        intgen_samptxt_name = 'integrated_call_samples_v3.20130502.ALL.panel'
+
         print('')
         
         #Если сохранённой панели нет, скачиваем её.
-        #Соответствующая функция также вернёт путь к панели.
-        intgen_samptxt_path = download_intgen_file(intgen_hg19_url, intgen_samptxt_name, intgen_dir_path)
+        #Эта функция также вернёт путь к панели.
+        intgen_samptxt_path = download_intgen_file(intgen_hg19page_url, intgen_samptxt_name, intgen_dir_path)
         
         #Собираем имя будущей JSON-редакции панели и путь к ней.
         intgen_sampjson_name = '.'.join(intgen_samptxt_name.split('.')[:-1]) + '.json'
@@ -139,35 +127,83 @@ def process_intgen_data(intgen_dir_path):
                                 #Прописывание полученного объекта в файл как JSON.
                                 json.dump(intgen_samptxt_dict, intgen_sampjson_opened, indent=4)
                                 
-        #Вытаскиваем имена архивов 1000 Genomes.
-        #Данные по митохондриальной ДНК игнорируются.
-        intgen_vcfgz_names = re.findall(r'ALL\.chr(?:\d{1,2}|X|Y)_GRCh38\.genotypes\.\S+?\.vcf\.gz(?=\\)', intgen_hg38_page)
+        #Захардкодим URL каталога FTP IGSR,
+        #содержащего данные 1000 Genomes,
+        #характеризующиеся обновлёнными
+        #до GRCh38 (hg38) координатами.
+        #Придумаем имя файла, предназначенного
+        #для хранения текста, содержащего
+        #имена файлов этого каталога.
+        #Потом, если бэкенд не запускался
+        #ранее, программа создаст упомянутый
+        #файл (далее - hg38-файл) и заполнит
+        #его текстовой копией FTP-каталога.
+        #Из hg38-файла далее потребуется брать
+        #имена только включающих в себя генотипы
+        #архивов и соответствующих tabix-индексов.
+        #В каждом таком архиве - VCF-таблица
+        #с данными по SNPs одной хромосомы:
+        #идентификаторы, некоторые сниповые
+        #характеристики и, самое главное
+        #для вычисления LD - огромный
+        #набор фазированных генотипов.
+        intgen_hg38page_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/'
+        intgen_hg38file_name = 'hg38_filenames.txt'
         
-        #Список для накопления путей к
-        #vcf.gz-архивам 1000 Genomes.
+        #Сохранение FTP-каталога с именами
+        #файлов 1000 Genomes сборки hg38,
+        #если это ранее не было сделано.
+        #Сохранить его важно для
+        #обеспечения последующих запусков
+        #программы полностью оффлайн.
+        intgen_hg38file_path = os.path.join(intgen_dir_path, intgen_hg38file_name)
+        if os.path.exists(intgen_hg38file_path) == True:
+                print(f'\n{intgen_hg38file_name} уже создан')
+        else:
+                print(f'\n{intgen_hg38file_name} не найден. Создание...')
+                with urllib.request.urlopen(intgen_hg38page_url) as response:
+                        with open(intgen_hg38file_path, 'w') as intgen_hg38file_opened:
+                                intgen_hg38file_opened.write(response.read().decode('UTF-8'))
+                                
+        #Извлекаем текст, содержащий
+        #имена hg38-1000Genomes-файлов.
+        #Теперь всё готово для отбора
+        #регуляркой нужных из них.
+        with open(intgen_hg38file_path) as intgen_hg38file_opened:
+                hg38_filenames_raw_str = intgen_hg38file_opened.read()
+                
+        #Вытаскиваем имена архивов 1000 Genomes,
+        #несущих данные, обязательные для вычисления LD.
+        #Всё, что связано с митохондриальной ДНК, игнорируется.
+        intgen_vcfgz_names = re.findall(r'ALL\.chr(?:\d{1,2}|X|Y)_GRCh38\.genotypes\.\S+?\.vcf\.gz(?=\n)', hg38_filenames_raw_str)
+        
+        #Список для накопления путей к подлежащим
+        #скачиванию vcf.gz-архивам 1000 Genomes.
         intgen_vcfgz_paths = []
         
         #Создание имени и пути для LevelDB-базы.
         intgen_vcfdb_name = '1000_Genomes_ldb'
         intgen_vcfdb_path = os.path.join(intgen_dir_path, intgen_vcfdb_name)
-
-        print('')
         
         #Проверка, нет ли у пользователя уже готовой БД.
         #Если есть, то пропускаем процесс создания.
         if os.path.exists(intgen_vcfdb_path) == True:
                 intgen_vcfdb_exists = True
-                print(f'{intgen_vcfdb_name} уже создана')
+                print(f'\n{intgen_vcfdb_name} уже создана')
         else:
                 intgen_vcfdb_exists = False
-                print(f'{intgen_vcfdb_name} не найдена. Будет создана')
+                print(f'\n{intgen_vcfdb_name} не найдена. Будет создана')
                 intgen_vcfdb_opened = plyvel.DB(intgen_vcfdb_path, create_if_missing=True)
                 
-        #В рамках этого цикла будут скачиваться и/или
-        #создаваться все или только недостающие файлы.
-        #Это - 1000 Genomes-архивы и tbi-индексы к ним,
-        #а также LevelDB-база, которая должна в конечном
-        #итоге включать в себя все данные 1000 Genomes.
+        #В рамках этого цикла будут
+        #скачиваться и/или создаваться
+        #все или только недостающие файлы.
+        #Это - подробно описанные выше
+        #1000 Genomes-архивы и tbi-индексы
+        #к ним, а также LevelDB-база,
+        #которая должна в конечном итоге
+        #включать в себя данные 1000
+        #Genomes, позволяющие считать LD.
         for intgen_vcfgz_name in intgen_vcfgz_names:
                 
                 print('')
@@ -176,15 +212,15 @@ def process_intgen_data(intgen_dir_path):
                 #При обнаружениии отсутствия этого
                 #файла вызываемая функция скачает его.
                 intgen_vcftbi_name = intgen_vcfgz_name + '.tbi'
-                download_intgen_file(intgen_hg38_url, intgen_vcftbi_name, intgen_dir_path)
+                download_intgen_file(intgen_hg38page_url, intgen_vcftbi_name, intgen_dir_path)
                 
                 #Проверка на наличие архива 1000 Genomes.
                 #Если его нет - он скачается.
                 #В любом случае, будет возвращён путь к нему.
                 #Путь будет добавлен в список таких путей.
-                intgen_vcfgz_path = download_intgen_file(intgen_hg38_url, intgen_vcfgz_name, intgen_dir_path)
+                intgen_vcfgz_path = download_intgen_file(intgen_hg38page_url, intgen_vcfgz_name, intgen_dir_path)
                 intgen_vcfgz_paths.append(intgen_vcfgz_path)
-
+                
                 #Если БД уже создана, то в данном
                 #цикле будет выполняться работа только
                 #с самими 1000 Genomes-архивами.
@@ -192,7 +228,7 @@ def process_intgen_data(intgen_dir_path):
                         continue
                 
                 print(f'{intgen_vcfdb_name} пополняется...')
-
+                
                 #Дальнейшие действия - для
                 #пополнения LevelDB-базы.
                 #Открываем архив 1000 Genomes
