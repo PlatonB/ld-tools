@@ -1,18 +1,18 @@
-__version__ = 'V5.3'
+__version__ = 'V5.4'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V5.3.
+Версия: V5.4.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
 Обязательно!
 Перед запуском программы нужно установить модули:
-sudo pip3 install plyvel plotly numpy
+pip3 install plyvel plotly numpy --user
 
 Поддерживаемые исходные файлы - таблицы,
 содержащие столбец с набором refSNPIDs.
@@ -365,15 +365,12 @@ for src_file_name in src_file_names:
 r2: {trg_vals["r_square"]}<br>
 D': {trg_vals["d_prime"]}<br>
 abs_dist: {abs(int(poss_srtd[col_index]) - int(poss_srtd[row_index]))}<br><br>
-chr: {chr_num}<br>
 x.hg38_pos: {poss_srtd[col_index]}<br>
 y.hg38_pos: {poss_srtd[row_index]}<br><br>
 x.rsID: {rs_ids_srtd[col_index]}<br>
 y.rsID: {rs_ids_srtd[row_index]}<br><br>
 x.alt_freq: {trg_vals['snp_2_alt_freq']}<br>
-y.alt_freq: {trg_vals['snp_1_alt_freq']}<br><br>
-pops: {", ".join(populations)}<br>
-gends: {", ".join(genders)}
+y.alt_freq: {trg_vals['snp_1_alt_freq']}
 '''
                                                 
                                         #Пользователь мог установить нижний порог LD.
@@ -462,7 +459,7 @@ gends: {", ".join(genders)}
                                                    showscale=False)
                                 layout = go.Layout(xaxis={'showticklabels': False},
                                                    yaxis={'showticklabels': False})
-                                ld_heatmap = go.Figure(data=[trace],
+                                ld_heatmap = go.Figure(data=trace,
                                                        layout=layout)
                                 
                         #Пользователь дал добро выводить на диаграмму надписи.
@@ -512,6 +509,22 @@ gends: {", ".join(genders)}
                                         ld_heatmap['layout']['xaxis']['tickfont'] = {'size': lab_font_size}
                                         ld_heatmap['layout']['yaxis']['tickfont'] = {'size': lab_font_size}
                                         
+                        #Заголовок будет добавляться в любую
+                        #диаграмму - обычную и аннотированную.
+                        #Он должен содержать в себе единые для
+                        #всей тепловой карты характеристики:
+                        #величину LD (r2 или D'), задающуя
+                        #цвета квадратиков, номер хромосомы, в
+                        #которой локализуются SNP, формирующие
+                        #оси диаграммы, а также названия
+                        #популяций и полов, по которым ранее
+                        #отбирались сэмплы для рассчёта LD.
+                        ld_heatmap['layout']['title'] = {'text':
+f'''defines_color: {ld_measure} ░
+chrom: {chr_num} ░
+populations: {", ".join(populations)} ░
+genders: {", ".join(genders)}'''}
+                        
                         #В тепловых картах Plotly, обычных и аннотированных,
                         #ось Y по умолчанию направлена снизу вверх.
                         #Чтобы ориентация тепловых карт, создаваемых
