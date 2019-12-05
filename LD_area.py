@@ -1,4 +1,4 @@
-__version__ = 'V7.1'
+__version__ = 'V7.2'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,14 +6,14 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V7.1.
+Версия: V7.2.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
 Обязательно!
 Перед запуском программы нужно установить модули:
-sudo pip3 install plyvel pysam
+pip3 install plyvel pysam --user
 
 Поддерживаемые исходные файлы - таблицы,
 содержащие столбец с набором refSNPIDs.
@@ -157,6 +157,8 @@ intgen_vcfdb_opened = plyvel.DB(intgen_vcfdb_path, create_if_missing=False)
 #Работа с исходными файлами.
 src_file_names = os.listdir(src_dir_path)
 for src_file_name in src_file_names:
+        if src_file_name.startswith('.~lock.'):
+                continue
         src_file_base = '.'.join(src_file_name.split('.')[:-1])
         
         #Построение пути к папке для результатов
@@ -308,9 +310,9 @@ for src_file_name in src_file_names:
                                                         #список при соответствии нескольким критериям:
                                                         #его идентификатор - refSNPID, он - не мультиаллельный
                                                         #и не тот же самый, что и запрашиваемый.
-                                                        if re.match(r'rs\d+$', oppos_rs_id) != None \
-                                                           and oppos_snp_info.find('MULTI_ALLELIC') == -1 \
-                                                           and oppos_rs_id != query_rs_id:
+                                                        if re.match(r'rs\d+$', oppos_rs_id) != None and \
+                                                           oppos_snp_info.find('MULTI_ALLELIC') == -1 and \
+                                                           oppos_rs_id != query_rs_id:
                                                                 
                                                                 #Получение значений LD.
                                                                 #Полезный побочный продукт функции -
@@ -451,7 +453,7 @@ for src_file_name in src_file_names:
                                                 #стиля, построив его из ранее
                                                 #описанных метаключей и метазначений.
                                                 if trg_file_type in ['tsv', 'rsids']:
-                                                        linked_snps.insert(0, '#' + ' '.join(map(join_header_element,
+                                                        linked_snps.insert(0, '##' + ' '.join(map(join_header_element,
                                                                                                  common_ann_keys,
                                                                                                  common_ann_vals)))
                                                         
@@ -486,10 +488,12 @@ for src_file_name in src_file_names:
                                                                                                                      'dist']))
                                                                 linked_snps.insert(2, '\t'.join([str(query_ann_val) for query_ann_val in query_ann_vals] + ['quer'] * 3))
                                                                 
-                                                        #RefSNPIDs: дополняем конечный список
+                                                        #RefSNPIDs: дополняем конечный
+                                                        #список именем снипового столбца и
                                                         #идентификатором запрашиваемого SNP.
                                                         elif trg_file_type == 'rsids':
-                                                                linked_snps.insert(1, query_rs_id)
+                                                                linked_snps.insert(1, '#rsID')
+                                                                linked_snps.insert(2, query_rs_id)
                                                                 
                                                         #Независимо от того, выбран табличный
                                                         #формат или вывод одиночных refSNPID,
