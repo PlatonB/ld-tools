@@ -1,18 +1,18 @@
-__version__ = 'V5.4'
+__version__ = 'V6.0'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
-Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2019.
-Версия: V5.4.
+Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
+Версия: V6.0.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
 
 Обязательно!
-Перед запуском программы нужно установить модули:
-pip3 install plyvel plotly numpy --user
+Перед запуском программы нужно установить
+MongoDB и PyMongo (см. README).
 
 Поддерживаемые исходные файлы - таблицы,
 содержащие столбец с набором refSNPIDs.
@@ -25,7 +25,7 @@ pip3 install plyvel plotly numpy --user
 
 def check_input(var):
         '''
-        Проверка, правильно ли пользователь ответил на
+        Проверка, правильно ли исследователь ответил на
         запрос, требующий подтверждения или отрицания.
         В случае ошибки работа программы завершится.
         '''
@@ -35,58 +35,43 @@ def check_input(var):
                 
 ####################################################################################################
 
-print('\nИмпорт модулей программы...')
+import sys, os, re, copy
 
-import sys
-
-#Раньше при нескольких подряд
-#запусках этой программы можно было
-#наблюдать, по меньшей мере, 2 бага.
-#1. Чаще: новая диаграмма рисовалась
-#тех же цветов, что и предыдущая.
-#2. Реже, но с разрушительными последствиями:
-#выдавались неправильные значения LD.
-#Всё это лечится подавлением
-#формирования питоновского кэша.
+#Подавление формирования питоновского кэша с
+#целью предотвращения искажения результатов.
 sys.dont_write_bytecode = True
 
-import os, re, gzip, plyvel, copy
-from backend.prepare_intgen_data import process_intgen_data
-from backend.retrieve_sample_indices import retrieve_sample_indices
+from backend.init_intgen_db import *
+from backend.create_intgen_db import create_intgen_db
+from backend.get_sample_names import get_sample_names
 from backend.ld_calc import ld_calc
-import plotly as py, plotly.graph_objs as go, plotly.figure_factory as ff
+import plotly.graph_objs as go, plotly.figure_factory as ff
 
 src_dir_path = input('\nПуть к папке с исходными файлами: ')
 
 trg_top_dir_path = input('\nПуть к папке для конечных файлов: ')
 
-intgen_dir_path = input('\nПуть к папке для данных 1000 Genomes: ')
-
 output = input('''\nВ каком виде выводить матрицы значений
 неравновесия по сцеплению (далее - LD-матрицы)?
-(игнорирование ввода ==> в обоих)
 [table(|t)|heatmap(|h)|both(|<enter>)]: ''')
 
 if output in ['heatmap', 'h', 'both', '']:
         texts = input('''\nВыводить на диаграмму текстовую информацию?
 (не рекомендуется, если строите матрицу > ~50x50 элементов; в любом
 случае данные будут появляться по наведению курсора на квадратик)
-(игнорирование ввода ==> не выводить)
 [yes(|y)|no(|n|<enter>)]: ''')
         check_input(texts)
         
         if texts in ['yes', 'y']:
                 val_font_size = input('''\nРазмер шрифта значений LD в квадратиках
-(игнорирование ввода ==> значение по умолчанию)
-[default(|<enter>)|...|11|12|13|...]: ''')
+[...|11|12(|default|<enter>)|13|...]: ''')
                 if val_font_size == '':
                         val_font_size = 'default'
                 elif val_font_size != 'default':
                         val_font_size = int(val_font_size)
                         
                 lab_font_size = input('''\nРазмер шрифта подписей к осям
-(игнорирование ввода ==> значение по умолчанию)
-[default(|<enter>)|...|11|12|13|...]: ''')
+[...|11|12(|default|<enter>)|13|...]: ''')
                 if lab_font_size == '':
                         lab_font_size = 'default'
                 elif lab_font_size != 'default':
@@ -94,7 +79,6 @@ if output in ['heatmap', 'h', 'both', '']:
                         
         color_pal = input('''\nЦветовая палитра тепловой карты
 (https://github.com/PlatonB/ld-tools#подходящие-цветовые-палитры)
-(игнорирование ввода ==> зелёные оттенки)
 [greens(|<enter>)|amp|tempo|brwnyl|turbid|...]: ''')
         if color_pal == '':
                 color_pal = 'greens'
@@ -112,16 +96,14 @@ if num_of_headers == '':
 else:
         num_of_headers = int(num_of_headers)
         
-populations = input('''\nДля индивидов какой(-их) супер-/субпопуляции(-ий) считать LD?
+populations = input('''\nДля индивидов каких супер-/субпопуляций считать LD?
 (http://www.internationalgenome.org/faq/which-populations-are-part-your-study/)
 (несколько - через пробел)
-(игнорирование ввода ==> всех)
 [all(|<enter>)|eur|jpt|jpt amr yri|...]: ''').upper().split()
 if populations == []:
         populations = ['ALL']
         
 genders = input('''\nДля индивидов какого пола считать LD?
-(игнорирование ввода ==> обоих)
 [male(|m)|female(|f)|both(|<enter>)]: ''').split()
 if genders == ['m']:
         genders = ['male']
@@ -135,8 +117,6 @@ elif genders not in [['male'], ['female']]:
         
 ld_filter = input('''\nОбнулять значения LD, если
 они меньше определённого порога?
-(игнорирование ввода ==> не
-фильтровать пары по порогу LD)
 [yes(|y)|no(|n|<enter>)]: ''')
 check_input(ld_filter)
 
@@ -163,27 +143,24 @@ elif ld_measure not in ['r_square', 'd_prime']:
         print(f'{ld_measure} - недопустимая опция')
         sys.exit()
         
-#Вызов функции, которая, во-первых, скачает
-#заархивированные VCF и панель сэмплов проекта
-#1000 Genomes, если они ещё не скачаны, во-вторых,
-#сконвертирует панель в JSON, а данные изо
-#всех VCF разместит в единую LevelDB-базу.
-#LevelDB-база данных (далее - база) будет
-#состоять из ключей - ID снипов всех хромосом,
-#и значений - сжатых строк упомянутых VCF.
-intgen_sampjson_path, intgen_vcfdb_path = process_intgen_data(intgen_dir_path)[:2]
-
+#Отдельным модулем ранее были созданы
+#объекты базы данных и коллекции сэмплов.
+#Но существование объектов не означает, что
+#база уже заполнена данными 1000 Genomes.
+#Проверяем это по наличию созданных коллекций.
+#Если нет ни одной коллекции, то запускаем
+#модуль построения 1000 Genomes-базы с нуля.
+if intgen_db_obj.command('dbstats')['collections'] == 0:
+        create_intgen_db()
+        
 #Вызов функции, производящей отбор
 #сэмплов, относящихся к указанным
-#пользователем популяциям и полам,
-#и возвращающей индексы этих сэмплов.
-sample_indices = retrieve_sample_indices(intgen_sampjson_path,
-                                         populations,
-                                         genders,
-                                         intgen_vcfdb_path)
+#исследователем популяциям и полам.
+sample_names = get_sample_names(populations,
+                                genders)
 
-#Открытие базы.
-intgen_vcfdb_opened = plyvel.DB(intgen_vcfdb_path, create_if_missing=False)
+#Получение списка имён всех коллекций.
+intgen_coll_names = intgen_db_obj.list_collection_names()
 
 ##Работа с исходными файлами, создание конечных папок.
 
@@ -191,7 +168,7 @@ src_file_names = os.listdir(src_dir_path)
 for src_file_name in src_file_names:
         src_file_base = '.'.join(src_file_name.split('.')[:-1])
         
-        #Открытие файла пользователя на чтение.
+        #Открытие файла исследователя на чтение.
         with open(os.path.join(src_dir_path, src_file_name)) as src_file_opened:
                 
                 #Считываем строки-хэдеры, чтобы сместить
@@ -201,14 +178,17 @@ for src_file_name in src_file_names:
                         
                 print(f'''\n~
 \n{src_file_name}
-\nПодготовка набора SNPs. Предупреждения (если будут):''')
+\nПодготовка набора refSNPIDs''')
                 
-                ##Очистка пользовательского набора refSNPID от повторяющихся.
-                
-                #Для этого данные refSNPID будут накапливаться во множество.
+                #refSNPIDs из обрабатываемого файла
+                #будут накапливаться во множество,
+                #чтобы не допустить повторяющихся.
+                #С группами одинаковых снипов
+                #матрицы выглядели бы абсурдно.
                 rs_ids = set()
                 
-                #Построчное прочтение основной части исходной таблицы.
+                #Построчное прочтение основной
+                #части исходной таблицы.
                 for line in src_file_opened:
                         
                         #Попытка получения refSNPID из текущей строки.
@@ -220,12 +200,57 @@ for src_file_name in src_file_names:
                         #Добавление идентификатора во множество.
                         rs_ids.add(rs_id)
                         
-        #Проверка, есть ли в пользовательском наборе хотя бы 2 refSNPID.
+        #Множества невозможно использовать
+        #в запросах к MongoDB-коллекциям.
+        #Поэтому множество идентификаторов
+        #придётся сконвертировать в список.
+        rs_ids = list(rs_ids)
+        
+        #Если снипов менее 2 штук, то как
+        #вы себе матрицу представите?:)
         if len(rs_ids) < 2:
-                print('\nФайл содержит менее двух refSNPIDs. Будет проигнорирован')
+                print('\tМенее двух refSNPIDs')
                 continue
         
-        #2 или больше refSNPID накопились, значит,
+        #Пользовательские refSNPID далее
+        #будут разбиты по хромосомам.
+        #В этот словарь будут накапливаться
+        #списки полученных из базы словарей,
+        #распределяясь по его разным ключам на
+        #основании принадлежности SNP хромосомам.
+        data_by_chrs = {}
+        
+        #База была спроектирована так,
+        #чтобы в каждой коллекции
+        #были данные одной хромосомы.
+        #Коллекцию сэмплов я здесь,
+        #разумеется, не имею в виду.
+        #Набор refSNPID будет
+        #искаться во всех хромосомных
+        #коллекциях по очереди.
+        #Оператор $in как бы
+        #встраивает ИЛИ между
+        #элементами искомого
+        #списка, позволяя выдать
+        #вхождения лишь его части.
+        for intgen_coll_name in intgen_coll_names:
+                if intgen_coll_name == 'samples':
+                        continue
+                elif intgen_db_obj[intgen_coll_name].count_documents({'ID': {'$in': rs_ids}}) > 2:
+                        data_by_chrs[intgen_coll_name] = list(intgen_db_obj[intgen_coll_name].find({'ID':
+                                                                                                    {'$in':
+                                                                                                     rs_ids}}))
+                        
+        #Если в коллекциях не нашлось ни одного
+        #идентификатора, значит, с качеством текущего
+        #набора данных исследователю совсем не повезло:(.
+        #Словарь, предназначенный для похромосомного
+        #распределения данных, останется пустым.
+        if data_by_chrs == {}:
+                print(f'\tНет валидных refSNPID')
+                continue
+        
+        #2 или больше refSNPID накопилось, значит,
         #есть смысл создавать папку, в которую
         #будут сохраняться разделённые по хромосомам
         #текстовые и/или графические LD-матрицы.
@@ -233,100 +258,51 @@ for src_file_name in src_file_names:
         trg_dir_path = os.path.join(trg_top_dir_path, f'{src_file_base}_LD_matr')
         os.mkdir(trg_dir_path)
         
-        ##Распределение по хромосомам пользовательских refSNPIDs.
-        
-        #В этот словарь будут накапливаться преобразованные в списки
-        #refSNPID-содержащие строки из базы, распределяясь по разным
-        #элементам словаря на основе принадлежности SNP хромосомам.
-        rows_by_chrs = {}
-        
-        #Перебор избавленных от повторов пользовательских refSNPID.
-        for rs_id in rs_ids:
-                
-                #Попытка извлечения из базы сжатой строки,
-                #соответствующей текущему пользовательскому refSNPID.
-                #Декомпрессия результата, превращение из
-                #байт-строки в обычную и преобразование в список.
-                #Если refSNPID в базе нет, то вместо сжатой строки вернётся None.
-                #В результате разархивации None выйдет пустая байтовая строка.
-                #После её конвертаций, упомянутых выше, сформируется список
-                #с обычной пустой строкой в качестве единственного элемента.
-                row = gzip.decompress(intgen_vcfdb_opened.get(rs_id.encode())).decode('utf-8').split('\t')
-                
-                #Если refSNPID из файла
-                #пользователя не обнаружился
-                #в базе, значит он - невалидный.
-                #В матрицу он допущен не будет.
-                #Одна из вероятных причин - в том,
-                #что именуемый им SNP - не биаллельный.
-                #Переходим к следующему refSNPID.
-                if row == ['']:
-                        print(f'\t{rs_id} - невалидный refSNPID (возможно, ID мультиаллельного SNP). В матрицу не пойдёт')
-                        continue
-
-                #refSNPID в базе нашёлся.
-                #Извлечение из refSNPID-содержащего списка
-                #номера хромосомы соответствующего SNP.
-                chr_num = row[0]
-                
-                #Ключами ранее созданного словаря
-                #будут номера хромосом, а значениями -
-                #двумерные массивы, каждый элемент
-                #которых - refSNPID-содержащий список.
-                #Если очередной такой список относится
-                #к хромосоме, которая ранее не
-                #добавлялась, то создаётся новая пара
-                #ключ-значение (хромосома-пустой список).
-                if chr_num not in rows_by_chrs:
-                        rows_by_chrs[chr_num] = []
-                        
-                #Размещение текущего refSNPID-содержащего списка
-                #в словарь с привязкой к хромосомному ключу.
-                rows_by_chrs[chr_num].append(row)
-                
-        #Признаком того, что невалидны все refSNPID исходного
-        #файла, будет пустота словаря, предназначенного
-        #для похромосомного распределения данных.
-        if rows_by_chrs == {}:
-                print(f'\t{src_file_name} не содержит ни одного валидного refSNPID')
-                continue
-                
-        ##Сортировка списка refSNPID по их позиции в хромосоме.
-        
         #Внутри этого цикла работа будет проводиться
         #для данных каждой хромосомы по-отдельности.
-        for chr_num in rows_by_chrs:
+        for chr_name in data_by_chrs:
                 
-                #Определение количества refSNPID-содержащих списков.
-                rows_in_chr_amount = len(rows_by_chrs[chr_num])
+                #Чтобы потом проще было визуально
+                #оценивать влияние физического
+                #расстояния на LD, refSNPIDs надо
+                #отсортировать по геномным позициям.
+                #Сортируем список словарей текущей
+                #хромосомы по значениям ключа POS.
+                #Итоговый порядок элементов сильно
+                #зависит от типа сортируемых данных.
+                #Позиции предусмотрительно были
+                #сконвертированы в int ещё во
+                #время формирования базы,
+                #поэтому на данном этапе
+                #это делать уже не нужно.
+                data_by_chrs[chr_name].sort(key=lambda snp_data: snp_data['POS'])
                 
-                #Поскольку LD определяется для пар SNP, то если на
-                #данную хромосому пришёлся только 1 SNP пользовательского
-                #набора, необходимо перейти к следующей хромосоме (если имеется).
-                if rows_in_chr_amount < 2:
-                        continue
-                
-                #Сортировка двумерного массива текущей хромосомы по позициям SNPs.
-                rows_by_chrs[chr_num].sort(key=lambda row: int(row[1]))
-                
-                #Получение списков отсортированных позиций и
+                #Получение отсортированных списков позиций и
                 #идущих в соответствующем порядке refSNPIDs.
-                poss_srtd = [row[1] for row in rows_by_chrs[chr_num]]
-                rs_ids_srtd = [row[2] for row in rows_by_chrs[chr_num]]
+                poss_srtd = [snp_data['POS'] for snp_data in data_by_chrs[chr_name]]
+                rs_ids_srtd = [snp_data['ID'] for snp_data in data_by_chrs[chr_name]]
                 
-                print(f'\nхромосома {chr_num}: формирование LD-матрицы...')
+                #Определение количества refSNPIDs, а,
+                #значит, и refSNPID-содержащих словарей.
+                snps_quan = len(rs_ids_srtd)
                 
-                ##Создание двумерных массивов такой структуры:
+                print(f'\n{chr_name}: формирование LD-матрицы')
+                
+                #Основой текстовой или
+                #графической матрицы
+                #будет двумерный массив
+                #такой структуры:
                 '''
-                 0      0     0
-                val     0     0
-                val    val    0
+                 0    0    0    ...
+                val   0    0    ...
+                val  val   0    ...
+                ...  ...  ...   ...
                 '''
                 
                 #Построение шаблона двумерного массива
                 #размером n x n, состоящего из нулей.
                 #Нули в дальнейшем могут заменяться на значения LD.
-                ld_two_dim = [[0 for cell_index in range(rows_in_chr_amount)] for row_index in range(rows_in_chr_amount)]
+                ld_two_dim = [[0 for cell_index in range(snps_quan)] for row_index in range(snps_quan)]
                 
                 #В случае, если будет строиться диаграмма,
                 #такой же шаблон понадобится для создания
@@ -335,36 +311,44 @@ for src_file_name in src_file_names:
                         info_two_dim = copy.deepcopy(ld_two_dim)
                 
                 #Перебор чисел, которые будут представлять
-                #собой индексы строк двумерных массивов.
-                for row_index in range(rows_in_chr_amount):
+                #собой индексы строк двумерного массива.
+                for row_index in range(snps_quan):
                         
                         #Перебор чисел, которые будут служить
-                        #индексами столбцов двумерных массивов.
-                        for col_index in range(rows_in_chr_amount):
+                        #индексами столбцов двумерного массива.
+                        for col_index in range(snps_quan):
                                 
-                                #Матрица, в принципе, может быть квадратом,
-                                #состоящим из двух одинаковых по форме и содержимому
-                                #прямоугольных треугольников, разделённых диагональю 0-ячеек.
-                                #Думаю, разумнее оставить лишь один из этих треугольников.
-                                #Получаем только те значения, которые соответствуют
-                                #ячейкам, индекс строки которых больше индекса столбца.
+                                #Матрица, в принципе, может
+                                #быть квадратом, состоящим
+                                #из двух одинаковых по форме
+                                #и содержимому прямоугольных
+                                #треугольников, разделённых
+                                #диагональю 0-ячеек.
+                                #Думаю, разумнее оставить лишь
+                                #один из этих треугольников.
+                                #Получаем только те значения,
+                                #которые соответствуют ячейкам
+                                #двумерного массива, индекс строки
+                                #которых больше индекса столбца.
                                 if row_index > col_index:
                                         
+                                        #Отбор фазированных генотипов по сэмплам.
                                         #Обращение к оффлайн-калькулятору для
                                         #получения словаря с r2, D' и частотами
                                         #минорного аллеля текущей пары SNP.
-                                        trg_vals = ld_calc(rows_by_chrs[chr_num][row_index],
-                                                           rows_by_chrs[chr_num][col_index],
-                                                           sample_indices)
+                                        trg_vals = ld_calc([data_by_chrs[chr_name][row_index][sample_name] for sample_name in sample_names],
+                                                           [data_by_chrs[chr_name][col_index][sample_name] for sample_name in sample_names])
                                         
-                                        #Для диаграммы каждое значение LD аннотируется:
-                                        #параллельно с накоплением массива LD-значений растёт
-                                        #массив дополнительной информации по каждой паре SNP.
+                                        #Для диаграммы каждое значение
+                                        #LD аннотируется: параллельно с
+                                        #накоплением массива LD-значений
+                                        #растёт массив дополнительной
+                                        #информации по каждой паре SNP.
                                         if 'info_two_dim' in locals():
                                                 info_two_dim[row_index][col_index] = f'''
 r2: {trg_vals["r_square"]}<br>
 D': {trg_vals["d_prime"]}<br>
-abs_dist: {abs(int(poss_srtd[col_index]) - int(poss_srtd[row_index]))}<br><br>
+abs_dist: {abs(poss_srtd[col_index] - poss_srtd[row_index])}<br><br>
 x.hg38_pos: {poss_srtd[col_index]}<br>
 y.hg38_pos: {poss_srtd[row_index]}<br><br>
 x.rsID: {rs_ids_srtd[col_index]}<br>
@@ -373,7 +357,7 @@ x.alt_freq: {trg_vals['snp_2_alt_freq']}<br>
 y.alt_freq: {trg_vals['snp_1_alt_freq']}
 '''
                                                 
-                                        #Пользователь мог установить нижний порог LD.
+                                        #Исследователь мог установить нижний порог LD.
                                         #Соответствующий блок кода неспроста расположен после
                                         #блока накопления аннотаций: на диаграммах клеточки с
                                         #подпороговыми LD будут закрашены как нулевые, но
@@ -391,12 +375,11 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                                         #значение LD выбранной величины.
                                         ld_two_dim[row_index][col_index] = trg_vals[ld_measure]
                                         
-                ##Сохранение результатов.
-                
-                #Пользователь указал создавать текстовые версии LD-матриц.
+                #Исследователь выбрал опцию создавать
+                #текстовые версии LD-матриц.
                 if output in ['table', 't', 'both', '']:
                         
-                        print(f'хромосома {chr_num}: сохранение текстовой LD-матрицы...')
+                        print(f'{chr_name}: сохранение текстовой LD-матрицы')
                         
                         #Создание текстового конечного файла.
                         #Прописываем в него хэдер с общими
@@ -406,34 +389,32 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                         #Потом прописываем LD-строки,
                         #добавляя перед каждой из
                         #них тоже refSNPID и позицию.
-                        tsv_file_name = f'{src_file_base}_chr{chr_num}_{ld_measure[0]}_tab.tsv'
+                        tsv_file_name = f'{src_file_base}_{chr_name}_{ld_measure[0]}_tab.tsv'
                         with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
-                                tab = '\t'
-                                tsv_file_opened.write(f'##General\tinfo:\t{ld_measure}\tchr{chr_num}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
+                                tab, poss_srtd = '\t', list(map(lambda pos: str(pos), poss_srtd))
+                                tsv_file_opened.write(f'##General\tinfo:\t{ld_measure}\t{chr_name}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
                                 tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
                                 tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
-                                rs_id_index = 0
-                                for row in ld_two_dim:
-                                        line = '\t'.join([str(cell) for cell in row]) + '\n'
-                                        tsv_file_opened.write(rs_ids_srtd[rs_id_index] + '\t' +
-                                                              poss_srtd[rs_id_index] + '\t' +
+                                for row_index in range(snps_quan):
+                                        line = '\t'.join([str(cell) for cell in ld_two_dim[row_index]]) + '\n'
+                                        tsv_file_opened.write(rs_ids_srtd[row_index] + '\t' +
+                                                              poss_srtd[row_index] + '\t' +
                                                               line)
-                                        rs_id_index += 1
                                         
                 #Если переменная, ссылающаяся на значение, которое
                 #должно стать одним из аргументов функции построения
                 #диаграммы, существует, то это означает, что
-                #пользователь предпочёл LD-матрицы визуализировать.
+                #исследователь предпочёл LD-матрицы визуализировать.
                 if 'color_pal' in locals():
                         
-                        print(f'хромосома {chr_num}: визуализация LD-матрицы...')
+                        print(f'{chr_name}: визуализация LD-матрицы')
                         
                         #Plotly позволяет строить тепловые карты
                         #как без надписей, так и с таковыми.
                         #Под надписями в рамках нашей задачи
                         #подразумеваются значения LD в квадратиках
                         #тепловой карты и refSNPID-лейблы осей X, Y.
-                        #Допустим, пользователь предпочёл не выводить
+                        #Допустим, исследователь предпочёл не выводить
                         #на диаграмму никаких текстовых данных.
                         #Тогда нужно будет создать обычную,
                         #не аннотированную, тепловую карту
@@ -443,7 +424,7 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                         #программа использует класс Heatmap.
                         #Класс принимает посчитанные LD и другую
                         #информацию по парам SNPs, заданную
-                        #пользователем цветовую схему и два
+                        #исследователем цветовую схему и два
                         #константных аргумента: наличие расстояния
                         #между квадратиками, отсутствие цветовой шкалы.
                         #Объект диаграммы дополняется словареподобным
@@ -462,7 +443,7 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                                 ld_heatmap = go.Figure(data=trace,
                                                        layout=layout)
                                 
-                        #Пользователь дал добро выводить на диаграмму надписи.
+                        #Исследователь дал добро выводить на диаграмму надписи.
                         else:
                                 
                                 #Для создания тепловых карт со значениями в
@@ -479,7 +460,7 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                                 #с LD-данными, refSNPIDs в качестве лейблов по X, Y
                                 #и дополнительной информацией по каждой паре SNPs.
                                 #Аргумент, который определяется на этапе интерактивного
-                                #диалога пользователем - цветовая схема тепловой карты.
+                                #диалога исследователем - цветовая схема тепловой карты.
                                 #Не изменяемый в рамках диалога аргумент - наличие
                                 #разделительных линий между квадратиками.
                                 #В create_annotated_heatmap по умолчанию
@@ -494,7 +475,7 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                                                                          ygap=1,
                                                                          colorscale=color_pal)
                                 
-                                #Пользователь кастомизировал размер
+                                #Исследователь кастомизировал размер
                                 #шрифта значений внутри квадратиков.
                                 #Тогда в каждый подсловарь структуры
                                 #'annotations' будет добавлена пара
@@ -503,7 +484,7 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                                         for ann_num in range(len(ld_heatmap['layout']['annotations'])):
                                                 ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = val_font_size
                                                 
-                                #При желании, пользователь мог задать недефолтное
+                                #При желании, исследователь мог задать недефолтное
                                 #значение параметра размера шрифта лейблов осей.
                                 if lab_font_size != 'default':
                                         ld_heatmap['layout']['xaxis']['tickfont'] = {'size': lab_font_size}
@@ -521,7 +502,7 @@ y.alt_freq: {trg_vals['snp_1_alt_freq']}
                         #отбирались сэмплы для рассчёта LD.
                         ld_heatmap['layout']['title'] = {'text':
 f'''defines_color: {ld_measure} ░
-chrom: {chr_num} ░
+chrom: {chr_name} ░
 populations: {", ".join(populations)} ░
 genders: {", ".join(genders)}'''}
                         
@@ -535,7 +516,7 @@ genders: {", ".join(genders)}'''}
                         ld_heatmap['layout']['yaxis']['autorange'] = 'reversed'
                         
                         #Построение диаграммы и её сохранение в HTML.
-                        html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_chr{chr_num}_{ld_measure[0]}_diag.html'
+                        html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_{chr_name}_{ld_measure[0]}_diag.html'
                         ld_heatmap.write_html(html_file_path)
                         
-intgen_vcfdb_opened.close()
+client.close()
