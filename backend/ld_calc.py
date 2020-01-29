@@ -1,29 +1,43 @@
-__version__ = 'V3.0'
+__version__ = 'V4.0'
 
-import os, json
-
-def ld_calc(snp_1_row, snp_2_row, sample_indices):
+def ld_calc(snp_1_phased_genotypes, snp_2_phased_genotypes):
         '''
-        Вычисление значений LD (r2 и D') для
-        двух SNP по фазированным генотипам.
+        Вычисление значений LD
+        (r2 и D') для двух
+        биаллельных SNP по
+        фазированным генотипам.
+        Функция запрашивает на вход
+        лишь списки фазированных
+        генотипов, что делает
+        калькулятор легко встраиваемым
+        в другие биоинформатические программы.
+        Предполагается, что фазированные
+        генотипы были ранее отобраны
+        по принадлежности соответствующих
+        сэмплов популяциям и полу.
+        Фазированные генотипы бывают такими:
+        1|1, 1|0, 0|1, 0|0, 1, 0.
+        По этим значениям можно
+        понять, альтернативное или
+        референсное основание находится
+        в определённом локусе у
+        индивида из выборки 1000 Genomes.
+        То, что значения, если не
+        рассматривать X (♂)- и
+        Y-хромосомы, парные - следствие
+        диплоидности у человека.
+        К примеру, 0|1 показывает,
+        что в данной позиции у
+        этого индивида на одной
+        копии хромосомы - референсный
+        аллель (0), а на другой -
+        альтернативный (1).
         '''
         
-        #Получение для выбранных сэмплов фазированных генотипов,
-        #соответствующих каждому из двух биаллельных SNP.
-        #По ним можно понять, альтернативное или
-        #референсное основание находится в определённом
-        #локусе у индивида из выборки 1000 Genomes.
-        #Фазированные генотипы бывают такими: 1|1, 1|0, 0|1, 0|0, 1, 0.
-        #То, что в каждом, если не рассматривать X и Y-хромосомы,
-        #два значения - следствие диплоидности у человека.
-        #К примеру, 0|1 показывает, что в данной позиции у
-        #этого индивида на одной копии хромосомы - референсный
-        #аллель (0), а на другой - альтернативный (1).
-        snp_1_phased_genotypes = [snp_1_row[sample_index] for sample_index in sample_indices]
-        snp_2_phased_genotypes = [snp_2_row[sample_index] for sample_index in sample_indices]
-        
-        #Разделение фазированных генотипов на генотипы каждой копии хромосомы.
-        #Для хромосом X (♂) и Y генотипы были и останутся одиночными.
+        #Разделение фазированных генотипов
+        #на генотипы каждой копии хромосомы.
+        #Для хромосом X (♂) и Y генотипы
+        #были и останутся одиночными.
         snp_1_genotypes, snp_2_genotypes = [], []
         for phased_genotype_num in range(len(snp_1_phased_genotypes)):
                 snp_1_genotypes += snp_1_phased_genotypes[phased_genotype_num].split('|')
@@ -86,13 +100,15 @@ def ld_calc(snp_1_row, snp_2_row, sample_indices):
         #проблемы на уровне фронтендов, при обработке
         #мономорфных SNP будет возвращён D', равный 0.
         if d >= 0:
-                d_max = min(snp_1_alt_freq * snp_2_ref_freq, snp_1_ref_freq * snp_2_alt_freq)
+                d_max = min(snp_1_alt_freq * snp_2_ref_freq,
+                            snp_1_ref_freq * snp_2_alt_freq)
                 try:
                         d_prime = round(d / d_max, 5)
                 except ZeroDivisionError:
                         d_prime = 0
         else:
-                d_min = max(-snp_1_alt_freq * snp_2_alt_freq, -snp_1_ref_freq * snp_2_ref_freq)
+                d_min = max(-snp_1_alt_freq * snp_2_alt_freq,
+                            -snp_1_ref_freq * snp_2_ref_freq)
                 try:
                         d_prime = round(d / d_min, 5)
                 except ZeroDivisionError:
@@ -106,15 +122,18 @@ def ld_calc(snp_1_row, snp_2_row, sample_indices):
         #в качестве значения r2 возвратится 0.
         #Эта ситуация подробно описана выше для D'.
         if d_prime != 0:
-                r_square = round((d ** 2) / (snp_1_alt_freq * snp_1_ref_freq * snp_2_alt_freq * snp_2_ref_freq), 5)
+                r_square = round((d ** 2) /
+                                 (snp_1_alt_freq * snp_1_ref_freq *
+                                  snp_2_alt_freq * snp_2_ref_freq), 5)
         else:
                 r_square = 0
-
-        #Оба значения LD, а также
-        #частоты альтернативных аллелей,
-        #организуем в словарь и возвращаем.
+                
+        #Оба значения LD и частоты
+        #альтернативных аллелей
+        #организуем в словарь.
         results = {'r_square': r_square,
                    'd_prime': d_prime,
                    'snp_1_alt_freq': round(snp_1_alt_freq, 5),
                    'snp_2_alt_freq': round(snp_2_alt_freq, 5)}
+        
         return results
