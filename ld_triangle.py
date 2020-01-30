@@ -1,11 +1,11 @@
-__version__ = 'V6.0'
+__version__ = 'V6.1'
 
 print('''
 Программа, строящая LD-матрицы для всех пар каждого
 набора SNP в виде треугольной тепловой карты и/или таблицы.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
-Версия: V6.0.
+Версия: V6.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -43,7 +43,7 @@ sys.dont_write_bytecode = True
 
 from backend.init_intgen_db import *
 from backend.create_intgen_db import create_intgen_db
-from backend.get_sample_names import get_sample_names
+from backend.samp_manager import get_sample_names, get_phased_genotypes
 from backend.ld_calc import ld_calc
 import plotly.graph_objs as go, plotly.figure_factory as ff
 
@@ -236,7 +236,7 @@ for src_file_name in src_file_names:
         for intgen_coll_name in intgen_coll_names:
                 if intgen_coll_name == 'samples':
                         continue
-                elif intgen_db_obj[intgen_coll_name].count_documents({'ID': {'$in': rs_ids}}) > 2:
+                elif intgen_db_obj[intgen_coll_name].count_documents({'ID': {'$in': rs_ids}}) >= 2:
                         data_by_chrs[intgen_coll_name] = list(intgen_db_obj[intgen_coll_name].find({'ID':
                                                                                                     {'$in':
                                                                                                      rs_ids}}))
@@ -333,11 +333,16 @@ for src_file_name in src_file_names:
                                 if row_index > col_index:
                                         
                                         #Отбор фазированных генотипов по сэмплам.
+                                        snp_1_phased_genotypes = get_phased_genotypes(data_by_chrs[chr_name][row_index],
+                                                                                      sample_names)
+                                        snp_2_phased_genotypes = get_phased_genotypes(data_by_chrs[chr_name][col_index],
+                                                                                      sample_names)
+                                        
                                         #Обращение к оффлайн-калькулятору для
                                         #получения словаря с r2, D' и частотами
                                         #минорного аллеля текущей пары SNP.
-                                        trg_vals = ld_calc([data_by_chrs[chr_name][row_index][sample_name] for sample_name in sample_names],
-                                                           [data_by_chrs[chr_name][col_index][sample_name] for sample_name in sample_names])
+                                        trg_vals = ld_calc(snp_1_phased_genotypes,
+                                                           snp_2_phased_genotypes)
                                         
                                         #Для диаграммы каждое значение
                                         #LD аннотируется: параллельно с

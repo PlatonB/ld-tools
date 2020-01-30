@@ -1,4 +1,4 @@
-__version__ = 'V8.0'
+__version__ = 'V8.1'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
-Версия: V8.0.
+Версия: V8.1.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -47,7 +47,7 @@ sys.dont_write_bytecode = True
 
 from backend.init_intgen_db import *
 from backend.create_intgen_db import create_intgen_db
-from backend.get_sample_names import get_sample_names
+from backend.samp_manager import get_sample_names, get_phased_genotypes
 from backend.ld_calc import ld_calc
 
 src_dir_path = input('\nПуть к папке с исходными файлами: ')
@@ -176,7 +176,7 @@ for src_file_name in src_file_names:
                                 continue
                         
                         if verbose in ['yes', 'y']:
-                                print(f'\n{query_snp_id}...')
+                                print(f'\n{query_snp_id}')
                                 
                         #База была спроектирована так,
                         #чтобы в каждой коллекции
@@ -207,7 +207,7 @@ for src_file_name in src_file_names:
                                 query_snp_data = intgen_db_obj[intgen_coll_name].find_one({'ID': query_snp_id})
                                 if query_snp_data != None:
                                         intgen_vcfcoll_obj = intgen_db_obj[intgen_coll_name]
-                                        query_snp_phased_genotypes = [query_snp_data[sample_name] for sample_name in sample_names]
+                                        query_snp_phased_genotypes = get_phased_genotypes(query_snp_data, sample_names)
                                         break
                         else:
                                 if verbose in ['yes', 'y']:
@@ -281,7 +281,7 @@ for src_file_name in src_file_names:
                                         continue
                                 
                                 #Отбор фазированных генотипов по сэмплам.
-                                oppos_snp_phased_genotypes = [oppos_snp_data[sample_name] for sample_name in sample_names]
+                                oppos_snp_phased_genotypes = get_phased_genotypes(oppos_snp_data, sample_names)
                                 
                                 #Получение значений LD с
                                 #помощью оффлайн-калькулятора.
