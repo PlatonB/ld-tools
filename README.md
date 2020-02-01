@@ -20,43 +20,58 @@ Clone or download
 (зелёная кнопка наверху страницы репозитория).
 
 4. Распакуйте его в любую папку.
-5. Создайте папку для данных из 1000 Genomes. Ничем её вручную не заполняйте!
 
 ### Установка сторонних компонентов.
-- Для всех модулей _LD_tools_ потребуется **_plyvel_** (Python-обёртка к _LevelDB_).
-- Для _LD_area_ — модуля, отвечающего за поиск SNPs в LD с запрашиваемыми — понадобится **_pysam_** (Python-обёртка к _HTSlib_)).
-- Для _LD_triangle_ — модуля построения LD-матриц — нужны будут **_plotly_** (библиотека визуализации) и **_numpy_** (математический пакет в качестве обязательной зависимости для _plotly_).
+#### MongoDB.
+Советую вначале ознакомиться с [основами работы в линуксовым терминале](https://github.com/PlatonB/ngs-pipelines#преодолеваем-страх-командной-строки-linux). Впрочем, если совсем лень, можете просто копировать, вставлять и запускать приведённые ниже команды. После установки настоятельно рекомендую перезагрузиться.
 
-#### Linux.
-_HTSlib_ запрашивает довольно нехилый набор зависимостей. Их надо удовлетворить, используя [командную строку](https://github.com/PlatonB/ngs-pipelines#преодолеваем-страх-командной-строки-linux).
+##### Ubuntu Linux.
+([elementary OS](https://elementary.io/ru/)/KDE neon/Linux Mint)
 
-Ubuntu Linux/[elementary OS](https://elementary.io/ru/)/KDE neon/Linux Mint:
+Подключение официального репозитория MongoDB.
 ```
-sudo apt install gcc, make, zlib1g-dev, libbz2-dev, liblzma-dev, libcurl4-openssl-dev, libssl-dev, libncurses5-dev
+wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | sudo apt-key add -
 ```
-
-Fedora:
 ```
-sudo dnf install gcc make zlib-devel bzip2-devel xz-devel curl-devel openssl-devel ncurses-devel
+echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list
 ```
 
-Если вы предпочитаете юзать [Conda](https://github.com/PlatonB/ngs-pipelines#установка-conda), то эти зависимости разрешатся автоматически при установке _pysam_.
-
-Инсталляция, собственно, Python-модулуй посредством _pip_:
+Обновление индекса пакетов ОС.
 ```
-pip3 install plyvel pysam plotly numpy --user
+sudo apt update
 ```
 
-Или можно с помощью _Conda_ и _pip_. Только для начала не забудьте [подключить](https://github.com/PlatonB/ngs-pipelines#установка-conda) канал _Bioconda_.
+Собственно, установка MongoDB.
 ```
-conda install pysam plotly
-```
-```
-pip install plyvel
+sudo apt install -y mongodb-org
 ```
 
-#### Windows.
-Из-за ошибок установки _plyvel_ и _pysam_ нативной поддержки Windows нет. Но через WSL вроде должно работать. Я сам Виндой не пользуюсь, поэтому надеюсь на вашу помощь с этим разделом документации.
+Перманентный запуск MongoDB. Лучше так сделать, если планируете использовать _ld-tools_ и [high-perf-bio](https://github.com/PlatonB/high-perf-bio) часто.
+```
+systemctl enable mongod.service
+```
+
+Если вам не нужно эксплуатировать MongoDB-решения каждый день, то рекомендую команду, активирующую MongoDB до момента перезагрузки.
+```
+sudo service mongod start
+```
+
+##### Fedora Linux.
+TBD.
+
+#### Python-библиотеки.
+Установка с помощью _pip_:
+```
+pip3 install pymongo plotly numpy --user
+```
+
+Установка с помощью [Conda](https://github.com/PlatonB/ngs-pipelines#установка-conda):
+```
+conda install pymongo plotly numpy
+```
+
+#### Примечание по поводу Windows.
+Теоретически, после установки MongoDB и whl-пакетов _pymongo_, _plotly_ и _numpy_, программа должна работать. Но у меня сейчас Windows нет, и я пока не проверял. Надеюсь, кто-нибудь поделится опытом в [Issues](https://github.com/PlatonB/ld-tools/issues).
 
 ## Запуск.
 1. Если пользуетесь _IDLE_, откройте в нём нужный компонент программы и запустите его кнопкой `F5`.
