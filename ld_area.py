@@ -1,4 +1,4 @@
-__version__ = 'V8.1'
+__version__ = 'V8.2'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
-Версия: V8.1.
+Версия: V8.2.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -324,10 +324,10 @@ for src_file_name in src_file_names:
                                 #SNP, а также значения LD и
                                 #физическое расстояние между
                                 #этим SNP и запрашиваемым.
-                                oppos_snp_pos, oppos_snp_ref, oppos_snp_alt, oppos_snp_type = oppos_snp_data['POS'], \
-                                                                                              oppos_snp_data['REF'], \
-                                                                                              oppos_snp_data['ALT'], \
-                                                                                              oppos_snp_data['INFO']['VT']
+                                oppos_snp_pos = oppos_snp_data['POS']
+                                oppos_snp_ref = oppos_snp_data['REF']
+                                oppos_snp_alt = oppos_snp_data['ALT']
+                                oppos_snp_type = oppos_snp_data['INFO']['VT']
                                 oppos_snp_vals = [oppos_snp_pos,
                                                   oppos_snp_id,
                                                   oppos_snp_ref,
@@ -405,9 +405,9 @@ for src_file_name in src_file_names:
                                 #ключи, представляющие собой названия
                                 #характеристик того или иного SNP.
                                 if trg_file_type in ['json', 'tsv']:
-                                        query_snp_ref, query_snp_alt, query_snp_type = query_snp_data['REF'], \
-                                                                                       query_snp_data['ALT'], \
-                                                                                       query_snp_data['INFO']['VT']
+                                        query_snp_ref = query_snp_data['REF']
+                                        query_snp_alt = query_snp_data['ALT']
+                                        query_snp_type = query_snp_data['INFO']['VT']
                                         query_ann_vals, header_keys = [query_snp_pos,
                                                                        query_snp_id,
                                                                        query_snp_ref,
