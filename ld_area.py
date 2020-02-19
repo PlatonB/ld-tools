@@ -1,4 +1,4 @@
-__version__ = 'V8.2'
+__version__ = 'V8.3'
 
 print('''
 Программа ищет в пределах фланков SNPs,
@@ -6,7 +6,7 @@ print('''
 по сцеплению с каждым запрашиваемым SNP.
 
 Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
-Версия: V8.2.
+Версия: V8.3.
 Лицензия: GNU General Public License version 3.
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
@@ -281,7 +281,8 @@ for src_file_name in src_file_names:
                                         continue
                                 
                                 #Отбор фазированных генотипов по сэмплам.
-                                oppos_snp_phased_genotypes = get_phased_genotypes(oppos_snp_data, sample_names)
+                                oppos_snp_phased_genotypes = get_phased_genotypes(oppos_snp_data,
+                                                                                  sample_names)
                                 
                                 #Получение значений LD с
                                 #помощью оффлайн-калькулятора.
@@ -360,7 +361,7 @@ for src_file_name in src_file_names:
                                 #сконкатенируются в табличную строку,
                                 #которая поступит в конечный список.
                                 elif trg_file_type == 'tsv':
-                                        linked_snps.append('\t'.join([str(oppos_snp_val) for oppos_snp_val in oppos_snp_vals]))
+                                        linked_snps.append('\t'.join(map(str, oppos_snp_vals)))
                                         
                         #Конечная папка, хромосомная подпапка и
                         #файл с результатами могут быть созданы
@@ -456,10 +457,9 @@ for src_file_name in src_file_names:
                                         #к ним элементы r2, D' и dist, а, во-вторых,
                                         #строку с характеристиками запрашиваемого SNP.
                                         elif trg_file_type == 'tsv':
-                                                linked_snps.insert(1, '#' + '\t'.join(header_keys + ["r2",
-                                                                                                     "D'",
-                                                                                                     'dist']))
-                                                linked_snps.insert(2, '\t'.join([str(query_ann_val) for query_ann_val in query_ann_vals] +
+                                                linked_snps.insert(1, '#' + '\t'.join(header_keys +
+                                                                                      ["r2", "D'", 'dist']))
+                                                linked_snps.insert(2, '\t'.join(list(map(str, query_ann_vals)) +
                                                                                 ['quer'] * 3))
                                                 
                                         #RefSNPIDs: дополняем конечный
