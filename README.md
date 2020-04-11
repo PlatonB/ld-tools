@@ -23,55 +23,18 @@ Clone or download
 
 ### Установка сторонних компонентов.
 #### MongoDB.
-Советую вначале ознакомиться с [основами работы в линуксовым терминале](https://github.com/PlatonB/ngs-pipelines#преодолеваем-страх-командной-строки-linux). Впрочем, если совсем лень, можете просто копировать, вставлять и запускать приведённые ниже команды. После установки настоятельно рекомендую перезагрузиться.
-
-##### Ubuntu Linux.
-([elementary OS](https://elementary.io/ru/)/KDE neon/Linux Mint)
-
-Подключение официального репозитория MongoDB.
-```
-wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | sudo apt-key add -
-```
-```
-echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list
-```
-
-Обновление индекса пакетов ОС.
-```
-sudo apt update
-```
-
-Собственно, установка MongoDB.
-```
-sudo apt install -y mongodb-org
-```
-
-Перманентный запуск MongoDB. Лучше так сделать, если планируете использовать _ld-tools_ и [high-perf-bio](https://github.com/PlatonB/high-perf-bio) часто.
-```
-systemctl enable mongod.service
-```
-
-Если вам не нужно эксплуатировать MongoDB-решения каждый день, то рекомендую команду, активирующую MongoDB до момента перезагрузки.
-```
-sudo service mongod start
-```
-
-##### Fedora Linux.
-TBD.
+Следуйте подробной [инструкции из README _high-perf-bio_](https://github.com/PlatonB/high-perf-bio#mongodb).
 
 #### Python-библиотеки.
 Установка с помощью _pip_:
 ```
-pip3 install pymongo plotly numpy --user
+pip3 install pymongo plotly numpy
 ```
 
-Установка с помощью [Conda](https://github.com/PlatonB/ngs-pipelines#установка-conda):
+Установка с помощью [_Conda_](https://github.com/PlatonB/ngs-pipelines#установка-conda):
 ```
 conda install pymongo plotly numpy
 ```
-
-#### Примечание по поводу Windows.
-Теоретически, после установки MongoDB и whl-пакетов _pymongo_, _plotly_ и _numpy_, программа должна работать. Но у меня сейчас Windows нет, и я пока не проверял. Надеюсь, кто-нибудь поделится опытом в [Issues](https://github.com/PlatonB/ld-tools/issues).
 
 ## Запуск.
 1. Если пользуетесь _IDLE_, откройте в нём нужный компонент программы и запустите его кнопкой `F5`.
