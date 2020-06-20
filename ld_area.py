@@ -1,30 +1,68 @@
-__version__ = 'V8.3'
+__version__ = 'V10.0'
 
-print('''
+def add_args():
+        '''
+        Работа с аргументами командной строки.
+        '''
+        argparser = ArgumentParser(description=f'''
 Программа ищет в пределах фланков SNPs,
 обладающие надпороговым значением неравновесия
 по сцеплению с каждым запрашиваемым SNP.
 
-Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
-Версия: V8.3.
-Лицензия: GNU General Public License version 3.
+Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020
+Версия: {__version__}
+Лицензия: GNU General Public License version 3
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
+Багрепорты/пожелания/общение: https://github.com/PlatonB/ld-tools/issues
 
-Обязательно!
-Перед запуском программы нужно установить
-MongoDB и PyMongo (см. README).
+Перед запуском программы нужно
+установить pysam (см. документацию).
 
 Поддерживаемые исходные файлы - таблицы,
 содержащие столбец с набором refSNPIDs.
 Если таких столбцов - несколько,
 программа будет использовать самый левый.
 
-Если настройки, запрашиваемые в рамках интерактивного
-диалога, вам непонятны - пишите, пожалуйста, в Issues.
-''')
+Инструментарий ld_tools использет для
+вычисления LD данные проекта 1000 Genomes.
+Их скачивание и процессинг может занять много
+времени, но осуществляется лишь однократно.
 
-def join_header_element(header_key, header_val):
+Условные обозначения в справке по CLI:
+- краткая форма с большой буквы - обязательный аргумент;
+- в квадратных скобках - значение по умолчанию;
+- в фигурных скобках - перечисление возможных значений.
+''',
+                                   formatter_class=RawTextHelpFormatter)
+        argparser.add_argument('-S', '--src-dir-path', metavar='str', dest='src_dir_path', type=str,
+                               help='Путь к папке с исходными таблицами')
+        argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
+                               help='Путь к папке для данных 1000 Genomes')
+        argparser.add_argument('-t', '--trg-top-dir-path', metavar='[None]', dest='trg_top_dir_path', type=str,
+                               help='Путь к папке для результатов (по умолчанию - путь к исходной папке)')
+        argparser.add_argument('-m', '--meta-lines-quan', metavar='[0]', default=0, dest='meta_lines_quan', type=int,
+                               help='Количество строк метаинформации, включая шапку, в начале каждой исходной таблицы')
+        argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
+                               help='Не проверять укомплектованность данных 1000 Genomes (сразу приступать к основным вычислениям)')
+        argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
+                               help='{male, female, both} Гендерная принадлежность сэмплов 1000 Genomes')
+        argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
+                               help='Популяционная принадлежность сэмплов 1000 Genomes (через запятую без пробела; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
+        argparser.add_argument('-w', '--flank-size', metavar='[100000]', default=100000, dest='flank_size', type=int,
+                               help='Размер *каждого* из фланков, в пределах которых надо искать сцепленные SNP')
+        argparser.add_argument('-l', '--ld-thres-measure', metavar='[r_square]', choices=['r_square', 'd_prime'], default='r_square', dest='ld_thres_measure', type=str,
+                               help='{r_square, d_prime} Мера для выставления нижнего порога LD')
+        argparser.add_argument('-z', '--ld-low-thres', metavar='[0.5]', default=0.5, dest='ld_low_thres', type=float,
+                               help='Нижний порог LD')
+        argparser.add_argument('-o', '--trg-file-type', metavar='[tsv]', choices=['tsv', 'json', 'rsids'], default='tsv', dest='trg_file_type', type=str,
+                               help='{tsv, json, rsids} Формат конечных файлов')
+        argparser.add_argument('-p', '--max-proc-quan', metavar='[4]', default=4, dest='max_proc_quan', type=int,
+                               help='Максимальное количество параллельно обрабатываемых таблиц')
+        args = argparser.parse_args()
+        return args
+
+def build_ucsc_header(header_key, header_val):
         '''
         Конечные не-JSON-файлы будут начинаться
         с хэдеров, структура которых напоминает
@@ -33,450 +71,351 @@ def join_header_element(header_key, header_val):
         '''
         if type(header_val).__name__ == 'str':
                 header_val = f'"{header_val}"'
-        elif type(header_val).__name__ == 'list':
+        elif type(header_val).__name__ == 'tuple':
                 header_val = ','.join([f'"{header_val_element}"' for header_val_element in header_val])
         return f'{header_key}={header_val}'
 
+class PrepSingleProc():
+        '''
+        Класс, спроектированный
+        под безопасный параллельный
+        поиск SNPs, сцепленных со
+        снипами из исходного файла.
+        '''
+        def __init__(self, args):
+                '''
+                Получение атрибутов, необходимых
+                заточенной под многопроцессовое
+                выполнение функции получения SNPs,
+                обладающих надпороговым LD по
+                отношению к SNPs исходного набора.
+                Атрибуты должны быть созданы
+                единожды и далее ни в
+                коем случае не изменяться.
+                Получаются они в основном из
+                указанных исследователем опций.
+                '''
+                self.src_dir_path = os.path.normpath(args.src_dir_path)
+                self.intgen_dir_path = os.path.normpath(args.intgen_dir_path)
+                if args.trg_top_dir_path is None:
+                        self.trg_top_dir_path = self.src_dir_path
+                else:
+                        self.trg_top_dir_path = os.path.normpath(args.trg_top_dir_path)
+                self.meta_lines_quan = args.meta_lines_quan
+                if args.skip_intgen_data_ver:
+                        self.intgen_convdb_path = os.path.join(self.intgen_dir_path, 'conversion.db')
+                else:
+                        self.intgen_convdb_path = prep_intgen_data(self.intgen_dir_path)
+                if args.gend_names == 'male':
+                        self.gend_names = ('male',)
+                elif args.gend_names == 'female':
+                        self.gend_names = ('female',)
+                else:
+                        self.gend_names = ('male', 'female')
+                self.pop_names = tuple(args.pop_names.upper().split(','))
+                self.sample_names = get_sample_names(self.gend_names,
+                                                     self.pop_names,
+                                                     self.intgen_convdb_path)
+                self.flank_size = args.flank_size
+                self.ld_thres_measure = args.ld_thres_measure
+                self.ld_low_thres = args.ld_low_thres
+                self.trg_file_type = args.trg_file_type
+                
+        def get_lnkd_snps(self, src_file_name):
+                '''
+                Функция нахождения SNPs,
+                находящихся в неравновесии
+                по сцеплению с каждым SNP.
+                '''
+                
+                #Подготовка к считыванию основной
+                #части файла исследователя.
+                with open(os.path.join(self.src_dir_path, src_file_name)) as src_file_opened:
+                        for meta_line_index in range(self.meta_lines_quan):
+                                src_file_opened.readline()
+                                
+                        #Значительная часть программы
+                        #привязана к функциональности pysam.
+                        #Эта библиотека поддерживает запросы
+                        #по геномным координатам, поэтому
+                        #далее будем оперировать только ими.
+                        #Извлечём имена хромосом и позиции
+                        #исходных SNPs из конвертационной
+                        #БД и накопим их в словарь, сделав
+                        #последнее таким образом, чтобы первые
+                        #стали ключами, а вторые - значениями.
+                        #По ходу работы с базой данных программа
+                        #скипнет невалидные исходные снипы.
+                        pos_by_chrs = {}
+                        with sqlite3.connect(self.intgen_convdb_path) as conn:
+                                cursor = conn.cursor()
+                                for line in src_file_opened:
+                                        try:
+                                                rs_id = re.search(r'rs\d+', line).group()
+                                        except AttributeError:
+                                                continue
+                                        cursor.execute(f'SELECT CHROM, POS FROM snps WHERE ID IN ("{rs_id}")')
+                                        chrom_pos = cursor.fetchone()
+                                        if chrom_pos is None:
+                                                continue
+                                        try:
+                                                pos_by_chrs[chrom_pos[0]].append(chrom_pos[1])
+                                        except KeyError:
+                                                pos_by_chrs[chrom_pos[0]] = [chrom_pos[1]]
+                                cursor.close()
+                                
+                #Дальнейшая обработка данных текущего
+                #файла возможна, только если в их составе
+                #обнаружился хоть один валидный rsID.
+                if len(pos_by_chrs) > 0:
+                        
+                        #В одну папку второго уровня
+                        #планируется размещать все
+                        #результаты, полученные по
+                        #данным одного исходного файла.
+                        src_file_base = '.'.join(src_file_name.split('.')[:-1])
+                        trg_dir_path = os.path.join(self.trg_top_dir_path, f'{src_file_base}_lnkd')
+                        os.mkdir(trg_dir_path)
+                        
+                        #Сокращённые заглавия таких
+                        #глобальных характеристик,
+                        #как хромосома и настройки
+                        #отбора оппонирующих SNPs.
+                        meta_keys = ['chr',
+                                     'gends',
+                                     'pops',
+                                     'each_flank',
+                                     f'{self.ld_thres_measure}_thres']
+                        
+                        #Имена столбцов TSV.
+                        #Они же - ключи JSON.
+                        header_row = ['hg38_pos',
+                                      'rsID',
+                                      'ref',
+                                      'alt',
+                                      'type',
+                                      'alt_freq']
+                        query_header_row = list(map(lambda header_cell: f'quer.{header_cell}', header_row))
+                        oppos_header_row = list(map(lambda header_cell: f'lnkd.{header_cell}', header_row))
+                        
+                        #Далее работа будет проводиться
+                        #для данных каждой хромосомы
+                        #по-отдельности, а результаты
+                        #пойдут в соответствующие хромосомные
+                        #подпапки (третий уровень вложенности).
+                        for chrom in pos_by_chrs:
+                                chr_dir_path = os.path.join(trg_dir_path, chrom)
+                                os.mkdir(chr_dir_path)
+                                if self.trg_file_type in ['tsv', 'json']:
+                                        ext = self.trg_file_type
+                                else:
+                                        ext = 'txt'
+                                        
+                                #Собственно, глобальные
+                                #характеристики: текущая
+                                #хромосома и заданные
+                                #исследователем опции.
+                                #Пойдут в TSV или JSON.
+                                meta_vals = [chrom,
+                                             self.gend_names,
+                                             self.pop_names,
+                                             self.flank_size,
+                                             self.ld_low_thres]
+                                
+                                #Хэдер для TSV или файла с чистыми rsIDs.
+                                #Его структура напоминает таковую у
+                                #таблиц, генерируемых UCSC Table Browser.
+                                ucsc_header_line = '##' + ' '.join(map(build_ucsc_header,
+                                                                       meta_keys,
+                                                                       meta_vals))
+                                
+                                #Поскольку известно, какая хромосома
+                                #сейчас обрабатывается, можно сразу
+                                #открыть именно относящимися к этой
+                                #хромосоме архив с 1000 Genomes-данными.
+                                #Из него для начала будем извлекать
+                                #аннотации только запрашиваемых SNPs.
+                                with VariantFile(os.path.join(self.intgen_dir_path, f'{chrom}.vcf.gz')) as intgen_vcf_opened:
+                                        for pos in pos_by_chrs[chrom]:
+                                                for query_snp_data in intgen_vcf_opened.fetch(chrom, pos - 1, pos):
+                                                        trg_file_name = f'{chrom}_{query_snp_data.id}_{self.ld_thres_measure[0]}_{str(self.ld_low_thres)}.{ext}'
+                                                        trg_file_path = os.path.join(chr_dir_path, trg_file_name)
+                                                        if os.path.exists(trg_file_path):
+                                                                continue
+                                                        
+                                                        #Создаём флаг, по которому далее будет
+                                                        #определено, оказались ли в конечном
+                                                        #файле строки, отличные от хэдеров.
+                                                        empty_res = True
+                                                        
+                                                        #Вычисляем границы фланков вокруг
+                                                        #текущего запрашиваемого SNP, где
+                                                        #надо искать сцепленные с ним SNPs.
+                                                        #Если нижняя граница заползёт за
+                                                        #ноль, то во избежание ошибки со
+                                                        #стороны pysam приравняем её к нулю.
+                                                        low_bound = query_snp_data.pos - self.flank_size
+                                                        if low_bound < 0:
+                                                                low_bound = 0
+                                                        high_bound = query_snp_data.pos + self.flank_size
+                                                        
+                                                        #Получение генотипов и
+                                                        #ключевых характеристик
+                                                        #запрашиваемого SNP.
+                                                        query_snp_genotypes = []
+                                                        for sample_name in self.sample_names:
+                                                                try:
+                                                                        query_snp_genotypes += query_snp_data.samples[sample_name]['GT']
+                                                                except KeyError:
+                                                                        continue
+                                                        query_snp_alt_freq = round(query_snp_genotypes.count(1) /
+                                                                                   len(query_snp_genotypes), 4)
+                                                        query_snp_ann = [str(query_snp_data.pos),
+                                                                         query_snp_data.id,
+                                                                         query_snp_data.ref,
+                                                                         ','.join(query_snp_data.alts),
+                                                                         ','.join(query_snp_data.info['VT']),
+                                                                         str(query_snp_alt_freq)]
+                                                        
+                                                        #Открываем конечный файл на запись
+                                                        #и проделываем кропотливую работу по
+                                                        #созданию формат-ориентированных хэдеров.
+                                                        with open(trg_file_path, 'w') as trg_file_opened:
+                                                                if self.trg_file_type == 'rsids':
+                                                                        trg_file_opened.write(ucsc_header_line + '\n')
+                                                                        trg_file_opened.write('#rsID\n')
+                                                                        trg_file_opened.write(query_snp_data.id + '\n')
+                                                                elif self.trg_file_type == 'tsv':
+                                                                        trg_file_opened.write(ucsc_header_line + '\n')
+                                                                        trg_file_opened.write('#' + '\t'.join(header_row +
+                                                                                                              ['r2', "D'", 'dist']) + '\n')
+                                                                        trg_file_opened.write('\t'.join(query_snp_ann +
+                                                                                                        ['quer'] * 3) + '\n')
+                                                                elif self.trg_file_type == 'json':
+                                                                        trg_obj = [dict(zip(meta_keys, meta_vals)),
+                                                                                   dict(zip(query_header_row, query_snp_ann))]
+                                                                        
+                                                                #Перебор 1000-Genomes-SNPs
+                                                                #в пределах окна, центром которого
+                                                                #служит запрашиваемый SNP.
+                                                                for oppos_snp_data in intgen_vcf_opened.fetch(chrom,
+                                                                                                              low_bound,
+                                                                                                              high_bound):
+                                                                        
+                                                                        #Оппонирующий SNP будет
+                                                                        #отсеян, если совпадает с
+                                                                        #запрашиваемым или имеет
+                                                                        #не-rs-идентификатор или
+                                                                        #является мультиаллельным.
+                                                                        if oppos_snp_data.id == query_snp_data.id \
+                                                                           or re.match(r'rs\d+$', oppos_snp_data.id) is None \
+                                                                           or 'MULTI_ALLELIC' in oppos_snp_data.info:
+                                                                                continue
+                                                                        
+                                                                        #Для SNP, прошедшего эту
+                                                                        #фильтрацию, произведём
+                                                                        #поиск генотипов по сэмплам.
+                                                                        oppos_snp_genotypes = []
+                                                                        for sample_name in self.sample_names:
+                                                                                try:
+                                                                                        oppos_snp_genotypes += oppos_snp_data.samples[sample_name]['GT']
+                                                                                except KeyError:
+                                                                                        continue
+                                                                                
+                                                                        #Получение значений LD с
+                                                                        #помощью оффлайн-калькулятора.
+                                                                        #Полезный побочный продукт функции -
+                                                                        #частоты альтернативного аллеля
+                                                                        #запрашиваемого и оппонирующего SNPs.
+                                                                        trg_vals = calc_ld(query_snp_genotypes,
+                                                                                           oppos_snp_genotypes)
+                                                                        
+                                                                        #Ещё один этап отбора оппонирующих
+                                                                        #SNP будет по устновленному
+                                                                        #исследователем порогу LD.
+                                                                        if trg_vals[self.ld_thres_measure] < self.ld_low_thres:
+                                                                                continue
+                                                                        
+                                                                        #Теперь понятно, что результаты
+                                                                        #будут, значит, есть смысл
+                                                                        #дать сигнал, запрещающий
+                                                                        #удаление конечного файла.
+                                                                        empty_res = False
+                                                                        
+                                                                        #Добавляем в конечный файл или объект
+                                                                        #информацию о текущем оппонирующем SNP.
+                                                                        #Если задан минималистический вывод,
+                                                                        #то это будет только rsID, а если TSV
+                                                                        #или JSON, то rsID с характеристиками.
+                                                                        if self.trg_file_type == 'rsids':
+                                                                                trg_file_opened.write(oppos_snp_data.id + '\n')
+                                                                                continue
+                                                                        oppos_snp_ann = [oppos_snp_data.pos,
+                                                                                         oppos_snp_data.id,
+                                                                                         oppos_snp_data.ref,
+                                                                                         ','.join(oppos_snp_data.alts),
+                                                                                         ','.join(oppos_snp_data.info['VT']),
+                                                                                         trg_vals['snp_2_alt_freq'],
+                                                                                         trg_vals['r_square'],
+                                                                                         trg_vals['d_prime'],
+                                                                                         oppos_snp_data.pos - query_snp_data.pos]
+                                                                        if self.trg_file_type == 'tsv':
+                                                                                trg_file_opened.write('\t'.join(map(str, oppos_snp_ann)) + '\n')
+                                                                        elif self.trg_file_type == 'json':
+                                                                                trg_obj.append(dict(zip(oppos_header_row + ['r2', "D'", 'dist'],
+                                                                                                        oppos_snp_ann)))
+                                                                                
+                                                                #При подготовке JSON-вывода
+                                                                #результаты должны были накапливаться
+                                                                #в объект - список словарей.
+                                                                #Теперь надо прописать его в файл.
+                                                                if self.trg_file_type == 'json':
+                                                                        json.dump(trg_obj, trg_file_opened, indent=4)
+                                                                        
+                                                        #Если флаг-индикатор так и
+                                                        #остался равен True, значит,
+                                                        #результатов нет, и в конечный
+                                                        #файл попали только хэдеры.
+                                                        #Такие конечные файлы
+                                                        #программа удалит.
+                                                        if empty_res:
+                                                                os.remove(trg_file_path)
+                                                                
 ####################################################################################################
 
-import sys, os, re, json
+import sys, os, re, sqlite3, copy, json
 
 #Подавление формирования питоновского кэша с
 #целью предотвращения искажения результатов.
 sys.dont_write_bytecode = True
 
-from backend.init_intgen_db import *
-from backend.create_intgen_db import create_intgen_db
-from backend.samp_manager import get_sample_names, get_phased_genotypes
-from backend.ld_calc import ld_calc
+from argparse import ArgumentParser, RawTextHelpFormatter
+from backend.prep_intgen_data import prep_intgen_data
+from backend.get_sample_names import get_sample_names
+from multiprocessing import Pool
+from pysam import VariantFile
+from backend.calc_ld import calc_ld
 
-src_dir_path = input('\nПуть к папке с исходными файлами: ')
-
-trg_top_dir_path = input('\nПуть к папке для конечных файлов: ')
-
-num_of_headers = input('''\nКоличество не обрабатываемых строк
-в начале каждой исходной таблицы
-(игнорирование ввода ==> хэдеров/шапок в таблицах нет)
-[0(|<enter>)|1|2|...]: ''')
-if num_of_headers == '':
-        num_of_headers = 0
+#Подготовительный этап: обработка
+#аргументов командной строки,
+#создание экземпляра содержащего
+#ключевую функцию класса, определение
+#оптимального количества процессов.
+args = add_args()
+prep_single_proc = PrepSingleProc(args)
+max_proc_quan = args.max_proc_quan
+src_file_names = os.listdir(prep_single_proc.src_dir_path)
+src_files_quan = len(src_file_names)
+if max_proc_quan > src_files_quan <= 8:
+        proc_quan = src_files_quan
+elif max_proc_quan > 8:
+        proc_quan = 8
 else:
-        num_of_headers = int(num_of_headers)
+        proc_quan = max_proc_quan
         
-populations = input('''\nДля индивидов каких супер-/субпопуляций считать LD?
-(http://www.internationalgenome.org/faq/which-populations-are-part-your-study/)
-(несколько - через пробел)
-[all(|<enter>)|eur|jpt|jpt amr yri|...]: ''').upper().split()
-if populations == []:
-        populations = ['ALL']
-        
-genders = input('''\nДля индивидов какого пола считать LD?
-[male(|m)|female(|f)|both(|<enter>)]: ''').split()
-if genders == ['m']:
-        genders = ['male']
-elif genders == ['f']:
-        genders = ['female']
-elif genders in [[], ['both']]:
-        genders = ['male', 'female']
-elif genders not in [['male'], ['female']]:
-        print(f'{" ".join(genders)} - недопустимая опция')
-        sys.exit()
-        
-flank_size = input('''\nРазмер *каждого* из фланков, в пределах
-которых надо искать сцепленные SNP
-[100000(|<enter>)|250000|...]: ''')
-if flank_size == '':
-        flank_size = 100000
-else:
-        flank_size = int(flank_size)
-        
-thres_ld_measure = input('''\nМера LD для выставления порога
-[r_square(|r)|d_prime(|d)]: ''')
-if thres_ld_measure == 'r':
-        thres_ld_measure = 'r_square'
-elif thres_ld_measure == 'd':
-        thres_ld_measure = 'd_prime'
-elif thres_ld_measure not in ['r_square', 'd_prime']:
-        print(f'{thres_ld_measure} - недопустимая опция')
-        sys.exit()
-        
-thres_ld_value = float(input(f'\n{thres_ld_measure} ≥ '))
+print(f'\nПоиск SNPs в неравновесии по сцеплению')
+print(f'\tколичество параллельных процессов: {proc_quan}')
 
-trg_file_type = input('''\nФормат конечных файлов
-[json(|j|<enter>)|tsv(|t)|rsids(|r)]: ''')
-if trg_file_type in ['j', '']:
-        trg_file_type = 'json'
-elif trg_file_type == 't':
-        trg_file_type = 'tsv'
-elif trg_file_type == 'r':
-        trg_file_type = 'rsids'
-elif trg_file_type not in ['json', 'tsv', 'rsids']:
-        print(f'{trg_file_type} - недопустимая опция')
-        sys.exit()
-        
-verbose = input('''\nВыводить подробную информацию о ходе работы?
-(не рекомендуется, если набор
-исходных данных очень большой)
-[yes(|y)|no(|n|<enter>)]: ''')
-if verbose not in ['yes', 'y', 'no', 'n', '']:
-        print(f'{verbose} - недопустимая опция')
-        sys.exit()
-        
-#Отдельным модулем ранее были созданы
-#объекты базы данных и коллекции сэмплов.
-#Но существование объектов не означает, что
-#база уже заполнена данными 1000 Genomes.
-#Проверяем это по наличию созданных коллекций.
-#Если нет ни одной коллекции, то запускаем
-#модуль построения 1000 Genomes-базы с нуля.        
-if intgen_db_obj.command('dbstats')['collections'] == 0:
-        create_intgen_db()
-        
-#Вызов функции, производящей отбор
-#сэмплов, относящихся к указанным
-#исследователем популяциям и полам.
-sample_names = get_sample_names(populations,
-                                genders)
-
-#Получение списка имён всех коллекций.
-intgen_coll_names = intgen_db_obj.list_collection_names()
-
-#Работа с исходными файлами.
-src_file_names = os.listdir(src_dir_path)
-for src_file_name in src_file_names:
-        if src_file_name.startswith('.~lock.'):
-                continue
-        src_file_base = '.'.join(src_file_name.split('.')[:-1])
-        
-        #Построение пути к папке для результатов
-        #по текущему пользовательскому файлу,
-        #которые, в свою очередь, должны будут
-        #распределяться по хромосомным подпапкам.
-        trg_dir_path = os.path.join(trg_top_dir_path, f'{src_file_base}_lnkd')
-        
-        #Открытие файла исследователя на чтение.
-        with open(os.path.join(src_dir_path, src_file_name)) as src_file_opened:
-                
-                print(f'''\n~
-\n{src_file_name}''')
-                
-                #Считываем строки-хэдеры, чтобы сместить
-                #курсор к началу основной части таблицы.
-                for header_index in range(num_of_headers):
-                        src_file_opened.readline()
-                        
-                #Построчное прочтение основной
-                #части исходной таблицы.
-                for line in src_file_opened:
-                        
-                        #Попытка получения refSNPID из текущей строки.
-                        try:
-                                query_snp_id = re.search(r'rs\d+', line).group()
-                        except AttributeError:
-                                continue
-                        
-                        if verbose in ['yes', 'y']:
-                                print(f'\n{query_snp_id}')
-                                
-                        #База была спроектирована так,
-                        #чтобы в каждой коллекции
-                        #были данные одной хромосомы.
-                        #Коллекцию сэмплов я здесь,
-                        #разумеется, не имею в виду.
-                        #Текущий refSNPID из файла
-                        #исследователя будет
-                        #искаться поочерёдно
-                        #в хромосомных коллекциях.
-                        #Поиск будет прерван в
-                        #случае обнаружения вхождения.
-                        #Успешный результат - словарь с
-                        #refSNPID, характеристиками SNP
-                        #и фазированными генотипами.
-                        #Неуспешный - None-значение.
-                        #В первом случае мы сохраняем
-                        #не только словарь, но и объект
-                        #коллекции, в которой нашёлся
-                        #текущий сниповый идентификатор.
-                        #В последнем случае этот refSNPID
-                        #объявляется невалидным, и
-                        #осуществляется переход к
-                        #обработке следующего refSNPID.
-                        for intgen_coll_name in intgen_coll_names:
-                                if intgen_coll_name == 'samples':
-                                        continue
-                                query_snp_data = intgen_db_obj[intgen_coll_name].find_one({'ID': query_snp_id})
-                                if query_snp_data != None:
-                                        intgen_vcfcoll_obj = intgen_db_obj[intgen_coll_name]
-                                        query_snp_phased_genotypes = get_phased_genotypes(query_snp_data, sample_names)
-                                        break
-                        else:
-                                if verbose in ['yes', 'y']:
-                                        print('\tневалидный refSNPID (возможно, ID мультиаллельного SNP).')
-                                continue
-                                
-                        #Получение номера хромосомы запрашиваемого
-                        #и впоследствии находимых SNP.
-                        chrom = query_snp_data['#CHROM']
-                        
-                        #Путь к хромосомной подпапке, имя
-                        #конечного файла и путь к нему.
-                        #Не факт, что соответствующие подпапка
-                        #и файл будут далее реально созданы.
-                        #Пути не пригодятся, если упомянутые
-                        #объекты файловой системы появились в
-                        #одной из прошлых итераций цикла.
-                        #Если данных объектов ещё нет, но
-                        #для текущего SNP не нашлось ни одного
-                        #сцепленного, то в файловой системе
-                        #также никаких изменений не произойдёт.
-                        trg_chrdir_path = os.path.join(trg_dir_path, chrom)
-                        if trg_file_type in ['json', 'tsv']:
-                                ext = trg_file_type
-                        else:
-                                ext = 'txt'
-                        trg_file_name = f'{chrom}_{query_snp_id}_{thres_ld_measure[0]}_{str(thres_ld_value)}.{ext}'
-                        trg_file_path = os.path.join(trg_chrdir_path, trg_file_name)
-                        
-                        #Если запрашиваемый SNP встретился
-                        #повторно, то необходимо предотвратить
-                        #поиск SNPs, с ним сцепленных.
-                        if os.path.exists(trg_file_path) == True:
-                                if verbose in ['yes', 'y']:
-                                        print('\tуже был ранее обработан')
-                                continue
-                        
-                        #Вытаскиваем из найденного
-                        #в коллекции словаря позицию
-                        #текущего запрашиваемого SNP.
-                        #Создаём список, в который
-                        #будут помещаться, как минимум,
-                        #идентификаторы SNP, сцепленных с
-                        #запрашиваемым, и объект-предшественник
-                        #стартового элемента (словаря
-                        #или хэдера с метаинформацией).
-                        #Туда также могут попадать
-                        #различные характеристики SNPs.
-                        #Содержимое списка будет зависить
-                        #от пресета, выбранного исследователем.
-                        query_snp_pos, linked_snps = query_snp_data['POS'], []
-                        
-                        #Позиция запрашиваемого SNP есть,
-                        #теперь можно вытащить из той же
-                        #коллекции, где был найден этот SNP,
-                        #словари со всеми SNP в заданной
-                        #исследователем окрестности.
-                        #Далее эти словари и соответствующие
-                        #SNP будут называться кандидатными.
-                        oppos_curs_obj = intgen_vcfcoll_obj.find({'POS': {'$gte': query_snp_pos - flank_size,
-                                                                          '$lte': query_snp_pos + flank_size}})
-                        
-                        #Перебор всех кандидатных словарей,
-                        #оппонирующих текущему refSNPID.
-                        #Среди кандидатных идентификаторов
-                        #обязательно попадётся запрашиваемый.
-                        #Он, разумеется, будет отсеян.
-                        for oppos_snp_data in oppos_curs_obj:
-                                oppos_snp_id = oppos_snp_data['ID']
-                                if oppos_snp_id == query_snp_id:
-                                        continue
-                                
-                                #Отбор фазированных генотипов по сэмплам.
-                                oppos_snp_phased_genotypes = get_phased_genotypes(oppos_snp_data,
-                                                                                  sample_names)
-                                
-                                #Получение значений LD с
-                                #помощью оффлайн-калькулятора.
-                                #Полезный побочный продукт функции -
-                                #частоты альтернативного аллеля
-                                #запрашиваемого и кандидатного SNPs.
-                                trg_vals = ld_calc(query_snp_phased_genotypes,
-                                                   oppos_snp_phased_genotypes)
-                                
-                                #Отбор кандидатных
-                                #SNP по устновленному
-                                #исследователем
-                                #порогу LD.
-                                if trg_vals[thres_ld_measure] < thres_ld_value:
-                                        continue
-                                
-                                #Добавление в конечный список очередного элемента.
-                                #Что это будет за элемент - зависит от решения
-                                #исследователя, в каком виде выводить результаты.
-                                #Для начала проверим, не предпочёл ли исследователь
-                                #самый минималистичный вывод - набор refSNPID.
-                                #Если да, заселим в список текущий кандидатный
-                                #refSNPID и сразу перейдём к словарю со следующим.
-                                if trg_file_type == 'rsids':
-                                        linked_snps.append(oppos_snp_id)
-                                        continue
-                                
-                                #Если конечный формат - JSON
-                                #или TSV, то тут всё сложнее.
-                                #Файлы таких форматов для того
-                                #и создаём, чтобы в них уместить
-                                #в структурированном виде
-                                #как можно больше информации.
-                                #Ради дальнейшего размещения
-                                #в конечный список соберём
-                                #позицию, ID, оба сиквенса,
-                                #точный тип мутации и частоту
-                                #альтернативного аллеля
-                                #(AF) текущего сцепленного
-                                #SNP, а также значения LD и
-                                #физическое расстояние между
-                                #этим SNP и запрашиваемым.
-                                oppos_snp_pos = oppos_snp_data['POS']
-                                oppos_snp_ref = oppos_snp_data['REF']
-                                oppos_snp_alt = oppos_snp_data['ALT']
-                                oppos_snp_type = oppos_snp_data['INFO']['VT']
-                                oppos_snp_vals = [oppos_snp_pos,
-                                                  oppos_snp_id,
-                                                  oppos_snp_ref,
-                                                  oppos_snp_alt,
-                                                  oppos_snp_type,
-                                                  trg_vals['snp_2_alt_freq'],
-                                                  trg_vals['r_square'],
-                                                  trg_vals['d_prime'],
-                                                  oppos_snp_pos - query_snp_pos]
-                                
-                                #Если запланирован JSON-вывод,
-                                #для собранных значений составим
-                                #список соответствующих ключей.
-                                #Объединим ключи и значения в словарь
-                                #и добавим его в конечный список.
-                                if trg_file_type == 'json':
-                                        oppos_snp_keys = ['lnkd.hg38_pos',
-                                                          'lnkd.rsID',
-                                                          'lnkd.ref',
-                                                          'lnkd.alt',
-                                                          'lnkd.type',
-                                                          'lnkd.alt_freq',
-                                                          "r2",
-                                                          "D'",
-                                                          'dist']
-                                        linked_snps.append(dict(zip(oppos_snp_keys,
-                                                                    oppos_snp_vals)))
-                                        
-                                #Если output - TSV - упомянутые значения
-                                #сконкатенируются в табличную строку,
-                                #которая поступит в конечный список.
-                                elif trg_file_type == 'tsv':
-                                        linked_snps.append('\t'.join(map(str, oppos_snp_vals)))
-                                        
-                        #Конечная папка, хромосомная подпапка и
-                        #файл с результатами могут быть созданы
-                        #при условии, что в конечном списке
-                        #оказался хоть один сцепленный SNP.
-                        if linked_snps != []:
-                                
-                                #Создание конечной папки и хромосомной
-                                #подпапки, если таковых ещё нет.
-                                #Если подпапка есть, то наличие
-                                #папки проверяться не будет.
-                                if os.path.exists(trg_chrdir_path) == False:
-                                        if os.path.exists(trg_dir_path) == False:
-                                                os.mkdir(trg_dir_path)
-                                        os.mkdir(trg_chrdir_path)
-                                        
-                                #Если файлу с результатами быть, подготовим
-                                #список таких метазначений, как номер
-                                #хромосомы и параметры запроса, плюс список
-                                #названий каждого из них (далее - метаключей).
-                                #Метазначения с метаключами в том или ином виде
-                                #должны будут пойти в конечный файл любого формата.
-                                common_ann_keys, common_ann_vals = ['chr',
-                                                                    'each_flank',
-                                                                    f'{thres_ld_measure}_thres',
-                                                                    'pops',
-                                                                    'gends'], [chrom,
-                                                                               flank_size,
-                                                                               thres_ld_value,
-                                                                               populations,
-                                                                               genders]
-                                
-                                #Для дальнейшего размещения в JSON или TSV
-                                #будут также собраны сведения о запрашиваемом
-                                #SNP: позиция, ID, сиквенсы, конкретизированный
-                                #тип, плюс частота альтернативного аллеля.
-                                #AF запрашиваемого SNP возвращается
-                                #при каждом вызове функции расчёта
-                                #LD, поэтому её можно взять из словаря,
-                                #получившегося при последнем таком расчёте.
-                                #Ещё что нужно для JSON и таблицы, так это
-                                #ключи, представляющие собой названия
-                                #характеристик того или иного SNP.
-                                if trg_file_type in ['json', 'tsv']:
-                                        query_snp_ref = query_snp_data['REF']
-                                        query_snp_alt = query_snp_data['ALT']
-                                        query_snp_type = query_snp_data['INFO']['VT']
-                                        query_ann_vals, header_keys = [query_snp_pos,
-                                                                       query_snp_id,
-                                                                       query_snp_ref,
-                                                                       query_snp_alt,
-                                                                       query_snp_type,
-                                                                       trg_vals['snp_1_alt_freq']], ['hg38_pos',
-                                                                                                     'rsID',
-                                                                                                     'ref',
-                                                                                                     'alt',
-                                                                                                     'type',
-                                                                                                     'alt_freq']
-                                        
-                                #В конечный список, собираемый
-                                #под таблицу или refSNPIDs-файл,
-                                #добавим хэдер сантакрузовского
-                                #стиля, построив его из ранее
-                                #описанных метаключей и метазначений.
-                                if trg_file_type in ['tsv', 'rsids']:
-                                        linked_snps.insert(0, '##' + ' '.join(map(join_header_element,
-                                                                                  common_ann_keys,
-                                                                                  common_ann_vals)))
-                                        
-                                #Создание и открытие конечного файла на запись.
-                                with open(trg_file_path, 'w') as trg_file_opened:
-                                        
-                                        #JSON: первый словарь получаем из уже
-                                        #знакомых нам метаключей и метазначений,
-                                        #второй - из ключей, к каждому из которых
-                                        #добавляется приставка, указывающая на
-                                        #призвание пары описывать запрашиваемый
-                                        #SNP, и соответствующих значений.
-                                        #Размещаем список словарей в файл,
-                                        #автоматически проставляя отступы.
-                                        #Телепортируемся через огромную толщу
-                                        #кода к следующей строке исходного файла:).
-                                        if trg_file_type == 'json':
-                                                linked_snps.insert(0, dict(zip(common_ann_keys,
-                                                                               common_ann_vals)))
-                                                linked_snps.insert(1, dict(zip([f'quer.{header_key}' for header_key in header_keys],
-                                                                               query_ann_vals)))
-                                                json.dump(linked_snps, trg_file_opened, indent=4)
-                                                continue
-                                        
-                                        #TSV: Собираем, во-первых, табулированную шапку
-                                        #из названий сниповых характеристик, добавив
-                                        #к ним элементы r2, D' и dist, а, во-вторых,
-                                        #строку с характеристиками запрашиваемого SNP.
-                                        elif trg_file_type == 'tsv':
-                                                linked_snps.insert(1, '#' + '\t'.join(header_keys +
-                                                                                      ["r2", "D'", 'dist']))
-                                                linked_snps.insert(2, '\t'.join(list(map(str, query_ann_vals)) +
-                                                                                ['quer'] * 3))
-                                                
-                                        #RefSNPIDs: дополняем конечный
-                                        #список именем снипового столбца и
-                                        #идентификатором запрашиваемого SNP.
-                                        elif trg_file_type == 'rsids':
-                                                linked_snps.insert(1, '#rsID')
-                                                linked_snps.insert(2, query_snp_id)
-                                                
-                                        #Независимо от того, выбран табличный
-                                        #формат или вывод одиночных refSNPID,
-                                        #прописываем все собранные в конечный
-                                        #список данные как обычные строки.
-                                        for line in linked_snps:
-                                                trg_file_opened.write(line + '\n')
-                                                
-                        elif verbose in ['yes', 'y']:
-                                print(f'\t{thres_ld_measure} >= {thres_ld_value}: SNPs в LD не найдены')
-                                
-client.close()
+#Параллельный запуск создания коллекций.
+with Pool(proc_quan) as pool_obj:
+        pool_obj.map(prep_single_proc.get_lnkd_snps, src_file_names)

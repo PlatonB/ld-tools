@@ -1,527 +1,479 @@
-__version__ = 'V6.1'
+__version__ = 'V10.0'
 
-print('''
-Программа, строящая LD-матрицы для всех пар каждого
-набора SNP в виде треугольной тепловой карты и/или таблицы.
+def add_args():
+        '''
+        Работа с аргументами командной строки.
+        '''
+        argparser = ArgumentParser(description=f'''
+Программа, строящая LD-матрицы для
+всех пар каждого набора SNP в виде
+треугольной тепловой карты и/или таблицы.
 
-Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020.
-Версия: V6.1.
-Лицензия: GNU General Public License version 3.
+Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020
+Версия: {__version__}
+Лицензия: GNU General Public License version 3
 Поддержать проект: https://money.yandex.ru/to/41001832285976
 Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
+Багрепорты/пожелания/общение: https://github.com/PlatonB/ld-tools/issues
 
-Обязательно!
 Перед запуском программы нужно установить
-MongoDB и PyMongo (см. README).
+pysam и plotly (см. документацию).
 
 Поддерживаемые исходные файлы - таблицы,
 содержащие столбец с набором refSNPIDs.
 Если таких столбцов - несколько,
 программа будет использовать самый левый.
 
-Если настройки, запрашиваемые в рамках интерактивного
-диалога, вам непонятны - пишите, пожалуйста, в Issues.
-''')
+В одном исходном файле могут
+содержаться данные разных хромосом.
+Для каждой хромосомы программа
+построит отдельную матрицу.
 
-def check_input(var):
+Инструментарий ld_tools использет для
+вычисления LD данные проекта 1000 Genomes.
+Их скачивание и процессинг может занять много
+времени, но осуществляется лишь однократно.
+
+Условные обозначения в справке по CLI:
+- краткая форма с большой буквы - обязательный аргумент;
+- в квадратных скобках - значение по умолчанию;
+- в фигурных скобках - перечисление возможных значений.
+''',
+                                   formatter_class=RawTextHelpFormatter)
+        argparser.add_argument('-S', '--src-dir-path', metavar='str', dest='src_dir_path', type=str,
+                               help='Путь к папке с исходными таблицами')
+        argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
+                               help='Путь к папке для данных 1000 Genomes')
+        argparser.add_argument('-t', '--trg-top-dir-path', metavar='[None]', dest='trg_top_dir_path', type=str,
+                               help='Путь к папке для результатов (по умолчанию - путь к исходной папке)')
+        argparser.add_argument('-m', '--meta-lines-quan', metavar='[0]', default=0, dest='meta_lines_quan', type=int,
+                               help='Количество строк метаинформации, включая шапку, в начале каждой исходной таблицы')
+        argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
+                               help='Не проверять укомплектованность данных 1000 Genomes (сразу приступать к основным вычислениям)')
+        argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
+                               help='{male, female, both} Гендерная принадлежность сэмплов 1000 Genomes')
+        argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
+                               help='Популяционная принадлежность сэмплов 1000 Genomes (через запятую без пробела; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
+        argparser.add_argument('-l', '--ld-measure', metavar='[r_square]', choices=['r_square', 'd_prime'], default='r_square', dest='ld_measure', type=str,
+                               help='{r_square, d_prime} Мера LD для построения матриц и выставления нижнего порога LD')
+        argparser.add_argument('-z', '--ld-low-thres', metavar='[None]', dest='ld_low_thres', type=float,
+                               help='Нижний порог LD (подпороговые значения приравняются к нулю)')
+        argparser.add_argument('-o', '--matrix-type', metavar='[heatmap]', choices=['heatmap', 'table', 'both'], default='heatmap', dest='matrix_type', type=str,
+                               help='{heatmap, table, both} Вид матриц значений LD: графические, текстовые, те и другие')
+        argparser.add_argument('-i', '--disp-letters', dest='disp_letters', action='store_true',
+                               help='Вывод LD-значений и лейблов осей на тепловую карту')
+        argparser.add_argument('-c', '--color-pal', metavar='[greens]', default='greens', dest='color_pal', type=str,
+                               help='Цветовая палитра тепловой карты (https://github.com/PlatonB/ld-tools#подходящие-цветовые-палитры)')
+        argparser.add_argument('-k', '--font-size', metavar='[None]', dest='font_size', type=int,
+                               help='Размер шрифта надписей на тепловой карте (plotly: по умолчанию - 12; больше диаграмма - мельче делайте шрифт)')
+        argparser.add_argument('-s', '--dont-disp-footer', dest='dont_disp_footer', action='store_true',
+                               help='Не выводить на тепловую карту информацию о программе')
+        argparser.add_argument('-p', '--max-proc-quan', metavar='[4]', default=4, dest='max_proc_quan', type=int,
+                               help='Максимальное количество параллельно обрабатываемых таблиц')
+        args = argparser.parse_args()
+        return args
+
+class PrepSingleProc():
         '''
-        Проверка, правильно ли исследователь ответил на
-        запрос, требующий подтверждения или отрицания.
-        В случае ошибки работа программы завершится.
+        Класс, спроектированный
+        под безопасное параллельное
+        построение матриц значений
+        неравновесия по сцеплению.
         '''
-        if var not in ['yes', 'y', 'no', 'n', '']:
-                print(f'{var} - недопустимая опция')
-                sys.exit()
+        def __init__(self, args):
+                '''
+                Получение атрибутов, необходимых
+                заточенной под многопроцессовое
+                выполнение функции формирования
+                графических и/или текстовых LD-матриц.
+                Атрибуты должны быть созданы
+                единожды и далее ни в
+                коем случае не изменяться.
+                Получаются они в основном из
+                указанных исследователем опций.
+                '''
+                self.src_dir_path = os.path.normpath(args.src_dir_path)
+                self.intgen_dir_path = os.path.normpath(args.intgen_dir_path)
+                if args.trg_top_dir_path is None:
+                        self.trg_top_dir_path = self.src_dir_path
+                else:
+                        self.trg_top_dir_path = os.path.normpath(args.trg_top_dir_path)
+                self.meta_lines_quan = args.meta_lines_quan
+                if args.skip_intgen_data_ver:
+                        self.intgen_convdb_path = os.path.join(self.intgen_dir_path, 'conversion.db')
+                else:
+                        self.intgen_convdb_path = prep_intgen_data(self.intgen_dir_path)
+                if args.gend_names == 'male':
+                        self.gend_names = ('male',)
+                elif args.gend_names == 'female':
+                        self.gend_names = ('female',)
+                else:
+                        self.gend_names = ('male', 'female')
+                self.pop_names = tuple(args.pop_names.upper().split(','))
+                self.sample_names = get_sample_names(self.gend_names,
+                                                     self.pop_names,
+                                                     self.intgen_convdb_path)
+                self.ld_measure = args.ld_measure
+                self.ld_low_thres = args.ld_low_thres
+                self.matrix_type = args.matrix_type
+                self.disp_letters = args.disp_letters
+                self.color_pal = args.color_pal
+                self.font_size = args.font_size
+                self.dont_disp_footer = args.dont_disp_footer
                 
+        def create_matrix(self, src_file_name):
+                '''
+                Функция создания одной LD-матрицы.
+                '''
+                
+                #Исходный файл считывается
+                #целиком и по нему формируется
+                #набор уникальных rsID.
+                #Уникальность нужна по той
+                #причине, что с группами
+                #одинаковых снипов матрицы
+                #выглядели бы абсурдно.
+                with open(os.path.join(self.src_dir_path, src_file_name)) as src_file_opened:
+                        for meta_line_index in range(self.meta_lines_quan):
+                                src_file_opened.readline()
+                        rs_ids = set()
+                        for line in src_file_opened:
+                                try:
+                                        rs_ids.add(re.search(r'rs\d+', line).group())
+                                except AttributeError:
+                                        continue
+                                
+                #Преобразование набора rsIDs из
+                #множества в кортеж, чтобы обеспечить
+                #построение SQL-запроса по этому набору.
+                rs_ids = tuple(rs_ids)
+                
+                #Если снипов менее 2 штук, то как
+                #вы себе матрицу представите?:)
+                if len(rs_ids) >= 2:
+                        
+                        #Для матрицы одинаково будут важны
+                        #и идентификаторы, и координаты SNPs.
+                        #Вторые будут получены по первым
+                        #через конвертационную базу данных.
+                        #Наборы rsIDs и позиций программа
+                        #сгруппирует по хромосомным ключам.
+                        data_by_chrs = {}
+                        id_to_coord = f'SELECT * FROM snps WHERE ID IN {rs_ids}'.replace(',)', ')')
+                        with sqlite3.connect(self.intgen_convdb_path) as conn:
+                                cursor = conn.cursor()
+                                for chrom, pos, rs_id in cursor.execute(id_to_coord):
+                                        try:
+                                                data_by_chrs[chrom].append([pos, rs_id])
+                                        except KeyError:
+                                                data_by_chrs[chrom] = [[pos, rs_id]]
+                                cursor.close()
+                                
+                        #Если в базе не нашлось соответствия ни одному
+                        #идентификатору, значит, с качеством текущего
+                        #набора данных исследователю совсем не повезло:(.
+                        #Поняв, что словарь, предназначенный для похромосомного
+                        #распределения данных, так и остался пустым,
+                        #программа не станет пытаться построить матрицу.
+                        if len(data_by_chrs) > 0:
+                                
+                                #В одну папку второго уровня
+                                #планируется размещать все
+                                #результаты, полученные по
+                                #данным одного исходного файла.
+                                src_file_base = '.'.join(src_file_name.split('.')[:-1])
+                                trg_dir_path = os.path.join(self.trg_top_dir_path, f'{src_file_base}_LD_matr')
+                                os.mkdir(trg_dir_path)
+                                
+                                #Одна хромосома - одна матрица.
+                                for chrom in data_by_chrs:
+                                        
+                                        #Чтобы потом проще было
+                                        #визуально оценивать влияние
+                                        #физического расстояния на
+                                        #LD, rsIDs отсортируются
+                                        #по геномным позициям.
+                                        data_by_chrs[chrom].sort(key=lambda pos_id: pos_id[0])
+                                        poss_srtd, rs_ids_srtd = [], []
+                                        for pos_id in data_by_chrs[chrom]:
+                                                poss_srtd.append(pos_id[0])
+                                                rs_ids_srtd.append(pos_id[1])
+                                                
+                                        #Знание количества rsIDs в
+                                        #ближайшей перспективе пригодится,
+                                        #чтобы задать размеры матрицы,
+                                        #а в дальнейшей - чтобы
+                                        #оформить её табличную версию.
+                                        snps_quan = len(rs_ids_srtd)
+                                        
+                                        #Основой текстовой или
+                                        #графической матрицы
+                                        #будет двумерный массив
+                                        #такой структуры:
+                                        '''
+                                         0    0    0    ...
+                                        val   0    0    ...
+                                        val  val   0    ...
+                                        ...  ...  ...   ...
+                                        '''
+                                        
+                                        #Построение шаблона квадратного
+                                        #двумерного массива, состоящего из нулей.
+                                        #Нули в дальнейшем могут заменяться на значения LD.
+                                        ld_two_dim = [[0 for col_index in range(snps_quan)] for row_index in range(snps_quan)]
+                                        
+                                        #В случае, если будет рисоваться диаграмма,
+                                        #такой же шаблон понадобится для создания
+                                        #матрицы сопутствующей информации.
+                                        if self.matrix_type in ['heatmap', 'both']:
+                                                info_two_dim = copy.deepcopy(ld_two_dim)
+                                                
+                                        #Для расчёта LD и аннотирования
+                                        #SNPs потребуются данные 1000 Genomes.
+                                        #Открываем соответствующий текущей
+                                        #хромосоме tabix-индексированный
+                                        #1000 Genomes-архив с помощью pysam.
+                                        #Pysam тут пригождается для быстрого
+                                        #доступа к случайным строкам архива.
+                                        with VariantFile(os.path.join(self.intgen_dir_path, f'{chrom}.vcf.gz')) as intgen_vcf_opened:
+                                                
+                                                #Перебор индексов строк и столбцов
+                                                #изначально нулевых матриц.
+                                                for row_index in range(snps_quan):
+                                                        for col_index in range(snps_quan):
+                                                                
+                                                                #Матрица, в принципе, может
+                                                                #быть квадратом, состоящим
+                                                                #из двух одинаковых по форме
+                                                                #и содержимому прямоугольных
+                                                                #треугольников, разделённых
+                                                                #диагональю 0-ячеек.
+                                                                #Думаю, разумнее оставить лишь
+                                                                #один из этих треугольников.
+                                                                #Для этого получаем только
+                                                                #те значения, которые соответствуют
+                                                                #ячейкам двумерного массива, индекс
+                                                                #строки которых больше индекса столбца.
+                                                                if row_index <= col_index:
+                                                                        continue
+                                                                
+                                                                #Отбор фазированных генотипов
+                                                                #текущей пары SNPs по сэмплам.
+                                                                #Извлечение референсного и
+                                                                #альтернативного аллелей этой пары.
+                                                                y_snp_genotypes, x_snp_genotypes = [], []
+                                                                for rec in intgen_vcf_opened.fetch(chrom,
+                                                                                                   data_by_chrs[chrom][row_index][0] - 1,
+                                                                                                   data_by_chrs[chrom][row_index][0]):
+                                                                        y_alleles = rec.ref + '/' + ','.join(rec.alts)
+                                                                        for sample_name in self.sample_names:
+                                                                                try:
+                                                                                        y_snp_genotypes += rec.samples[sample_name]['GT']
+                                                                                except KeyError:
+                                                                                        continue
+                                                                        break
+                                                                for rec in intgen_vcf_opened.fetch(chrom,
+                                                                                                   data_by_chrs[chrom][col_index][0] - 1,
+                                                                                                   data_by_chrs[chrom][col_index][0]):
+                                                                        x_alleles = rec.ref + '/' + ','.join(rec.alts)
+                                                                        for sample_name in self.sample_names:
+                                                                                try:
+                                                                                        x_snp_genotypes += rec.samples[sample_name]['GT']
+                                                                                except KeyError:
+                                                                                        continue
+                                                                        break
+                                                                
+                                                                #Обращение к оффлайн-калькулятору для
+                                                                #получения словаря с r2, D' и частотами
+                                                                #альтернативных аллелей сниповой пары.
+                                                                trg_vals = calc_ld(y_snp_genotypes,
+                                                                                   x_snp_genotypes)
+                                                                
+                                                                #Каждый элемент визуализируемой
+                                                                #матрицы аннотируется: параллельно
+                                                                #с накоплением массива LD-значений
+                                                                #растёт массив дополнительной
+                                                                #информации по каждой паре SNPs.
+                                                                if self.matrix_type in ['heatmap', 'both']:
+                                                                        info_two_dim[row_index][col_index] = f'''
+r2: {trg_vals["r_square"]}<br>
+D': {trg_vals["d_prime"]}<br>
+abs_dist: {abs(poss_srtd[col_index] - poss_srtd[row_index])}<br><br>
+{rs_ids_srtd[col_index]}.hg38_pos: {poss_srtd[col_index]}<br>
+{rs_ids_srtd[row_index]}.hg38_pos: {poss_srtd[row_index]}<br><br>
+{rs_ids_srtd[col_index]}.alleles: {x_alleles}<br>
+{rs_ids_srtd[row_index]}.alleles: {y_alleles}<br><br>
+{rs_ids_srtd[col_index]}.alt_freq: {trg_vals['snp_2_alt_freq']}<br>
+{rs_ids_srtd[row_index]}.alt_freq: {trg_vals['snp_1_alt_freq']}
+'''
+                                                                        
+                                                                #Исследователь мог установить нижний порог LD.
+                                                                #Соответствующий блок кода неспроста расположен после
+                                                                #блока накопления аннотаций: на диаграммах клеточки с
+                                                                #подпороговыми LD будут закрашены как нулевые, но
+                                                                #зато при наведении курсора там отобразятся настоящие
+                                                                #LD-значения, как раз извлекаемые из массива с аннотациями.
+                                                                #При обратном расположении этих блоков аннотации подпороговых
+                                                                #LD не сохранялись бы, ведь в блоке фильтрации - continue.
+                                                                if self.ld_low_thres != None:
+                                                                        if trg_vals[self.ld_measure] < self.ld_low_thres:
+                                                                                continue
+                                                                        
+                                                                #Если значение LD не отсеилось как
+                                                                #подпороговое, то попадёт в LD-матрицу:
+                                                                #0-ячейка будет заменена на найденное
+                                                                #значение LD выбранной величины.
+                                                                ld_two_dim[row_index][col_index] = trg_vals[self.ld_measure]
+                                                                
+                                        #Визуализация матрицы с помощью plotly.
+                                        if self.matrix_type in ['heatmap', 'both']:
+                                                
+                                                #Исследователь дал добро
+                                                #выводить на диаграмму надписи:
+                                                #rsIDs в качестве лейблов осей и
+                                                #значения LD внутри квадратиков
+                                                #непосредственно тепловой карты.
+                                                if self.disp_letters:
+                                                        
+                                                        #Создание объекта аннотированной тепловой карты.
+                                                        #Из чего он состоит - см. в ридми к ld_triangle.
+                                                        #Здесь только отмечу, что create_annotated_heatmap -
+                                                        #высокоуровневая функция библиотеки plotly,
+                                                        #берущая на себя большую часть этой работы.
+                                                        ld_heatmap = ff.create_annotated_heatmap(ld_two_dim,
+                                                                                                 x=rs_ids_srtd,
+                                                                                                 y=rs_ids_srtd,
+                                                                                                 hovertext=info_two_dim,
+                                                                                                 hoverinfo='text',
+                                                                                                 xgap=1,
+                                                                                                 ygap=1,
+                                                                                                 colorscale=self.color_pal,
+                                                                                                 showscale=False)
+                                                        
+                                                        #Возможная кастомизация размера шрифта
+                                                        #подписей к осям и чисел в квадратиках.
+                                                        if self.font_size != None:
+                                                                ld_heatmap.layout.xaxis.tickfont.size = self.font_size
+                                                                ld_heatmap.layout.yaxis.tickfont.size = self.font_size
+                                                                for ann_num in range(len(ld_heatmap.layout.annotations)):
+                                                                        ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = self.font_size
+                                                                        
+                                                #Исследователь предпочёл
+                                                #выводить на диаграмму
+                                                #минимум текстовых данных.
+                                                #Жертвовать надписями обычно
+                                                #приходится во избежание их
+                                                #взамного наползания в
+                                                #крупных тепловых картах.
+                                                #Построим объект смысловой
+                                                #части диаграммы и объект
+                                                #вторичных настроек, собирём
+                                                #их в финальный объект.
+                                                #Подробнее о структуре
+                                                #объектов plotly - в ридми.
+                                                else:
+                                                        trace = go.Heatmap(z=ld_two_dim,
+                                                                           hovertext=info_two_dim,
+                                                                           hoverinfo='text',
+                                                                           xgap=1,
+                                                                           ygap=1,
+                                                                           colorscale=self.color_pal,
+                                                                           showscale=False)
+                                                        layout = go.Layout(xaxis_showticklabels=False,
+                                                                           yaxis_showticklabels=False)
+                                                        ld_heatmap = go.Figure(data=trace,
+                                                                               layout=layout)
+                                                        
+                                                #Надписи, отличные от
+                                                #LD-значений и rsIDs.
+                                                #Заголовок создастся
+                                                #в любом случае, а вывод
+                                                #футера регулируется
+                                                #соответствующим флагом.
+                                                title = f'''
+defines color: {self.ld_measure} ░
+LD threshold: {self.ld_low_thres} ░
+chromosome: {chrom} ░
+genders: {", ".join(self.gend_names)} ░
+populations: {", ".join(self.pop_names)}
+'''
+                                                ld_heatmap.update_layout(title_text=title,
+                                                                         xaxis_side='bottom',
+                                                                         yaxis_autorange='reversed')
+                                                if self.dont_disp_footer == False:
+                                                        footer = '''
+сделано с помощью ld_triangle ░
+<a href="https://github.com/PlatonB/ld-tools">документация</a> ░
+<a href="https://money.yandex.ru/to/41001832285976">поддержать разработчика</a>'''
+                                                        ld_heatmap.update_layout(xaxis_title_text=footer,
+                                                                                 xaxis_title_font_size=10)
+                                                        
+                                                #Сохранение диаграммы в HTML.
+                                                html_file_name = f'{chrom}_{self.ld_measure[0]}_{src_file_base}.html'
+                                                html_file_path = os.path.join(trg_dir_path, html_file_name)
+                                                ld_heatmap.write_html(html_file_path)
+                                                
+                                        #Исследователь выбрал опцию создавать
+                                        #табличные варианты LD-матриц.
+                                        if self.matrix_type in ['table', 'both']:
+                                                
+                                                #Создание текстового конечного файла.
+                                                #Прописываем в него хэдер с общими
+                                                #характеристиками матрицы, пустую
+                                                #строку и две шапки: одна - с
+                                                #refSNPIDs, другая - с позициями.
+                                                #Потом прописываем LD-строки,
+                                                #добавляя перед каждой из
+                                                #них тоже refSNPID и позицию.
+                                                tsv_file_name = f'{chrom}_{self.ld_measure[0]}_{src_file_base}.tsv'
+                                                with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
+                                                        tab, poss_srtd = '\t', list(map(lambda pos: str(pos), poss_srtd))
+                                                        tsv_file_opened.write(f'##General\tinfo:\t{self.ld_measure}\t{chrom}\t{tab.join(self.pop_names)}\t{tab.join(self.gend_names)}\n\n')
+                                                        tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
+                                                        tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
+                                                        for row_index in range(snps_quan):
+                                                                line = '\t'.join([str(cell) for cell in ld_two_dim[row_index]]) + '\n'
+                                                                tsv_file_opened.write(rs_ids_srtd[row_index] + '\t' +
+                                                                                      poss_srtd[row_index] + '\t' +
+                                                                                      line)
+                                                                
 ####################################################################################################
 
-import sys, os, re, copy
+import sys, os, re, sqlite3, copy
 
 #Подавление формирования питоновского кэша с
 #целью предотвращения искажения результатов.
 sys.dont_write_bytecode = True
 
-from backend.init_intgen_db import *
-from backend.create_intgen_db import create_intgen_db
-from backend.samp_manager import get_sample_names, get_phased_genotypes
-from backend.ld_calc import ld_calc
-import plotly.graph_objs as go, plotly.figure_factory as ff
+from argparse import ArgumentParser, RawTextHelpFormatter
+from backend.prep_intgen_data import prep_intgen_data
+from backend.get_sample_names import get_sample_names
+from multiprocessing import Pool
+from pysam import VariantFile
+from backend.calc_ld import calc_ld
+import plotly.figure_factory as ff
+import plotly.graph_objs as go
 
-src_dir_path = input('\nПуть к папке с исходными файлами: ')
-
-trg_top_dir_path = input('\nПуть к папке для конечных файлов: ')
-
-output = input('''\nВ каком виде выводить матрицы значений
-неравновесия по сцеплению (далее - LD-матрицы)?
-[table(|t)|heatmap(|h)|both(|<enter>)]: ''')
-
-if output in ['heatmap', 'h', 'both', '']:
-        texts = input('''\nВыводить на диаграмму текстовую информацию?
-(не рекомендуется, если строите матрицу > ~50x50 элементов; в любом
-случае данные будут появляться по наведению курсора на квадратик)
-[yes(|y)|no(|n|<enter>)]: ''')
-        check_input(texts)
-        
-        if texts in ['yes', 'y']:
-                val_font_size = input('''\nРазмер шрифта значений LD в квадратиках
-[...|11|12(|default|<enter>)|13|...]: ''')
-                if val_font_size == '':
-                        val_font_size = 'default'
-                elif val_font_size != 'default':
-                        val_font_size = int(val_font_size)
-                        
-                lab_font_size = input('''\nРазмер шрифта подписей к осям
-[...|11|12(|default|<enter>)|13|...]: ''')
-                if lab_font_size == '':
-                        lab_font_size = 'default'
-                elif lab_font_size != 'default':
-                        lab_font_size = int(lab_font_size)
-                        
-        color_pal = input('''\nЦветовая палитра тепловой карты
-(https://github.com/PlatonB/ld-tools#подходящие-цветовые-палитры)
-[greens(|<enter>)|amp|tempo|brwnyl|turbid|...]: ''')
-        if color_pal == '':
-                color_pal = 'greens'
-                
-elif output not in ['table', 't']:
-        print(f'{output} - недопустимая опция')
-        sys.exit()
-        
-num_of_headers = input('''\nКоличество не обрабатываемых строк
-в начале каждой исходной таблицы
-(игнорирование ввода ==> хэдеров/шапок в таблицах нет)
-[0(|<enter>)|1|2|...]: ''')
-if num_of_headers == '':
-        num_of_headers = 0
+#Подготовительный этап: обработка
+#аргументов командной строки,
+#создание экземпляра содержащего
+#ключевую функцию класса, определение
+#оптимального количества процессов.
+args = add_args()
+prep_single_proc = PrepSingleProc(args)
+max_proc_quan = args.max_proc_quan
+src_file_names = os.listdir(prep_single_proc.src_dir_path)
+src_files_quan = len(src_file_names)
+if max_proc_quan > src_files_quan <= 8:
+        proc_quan = src_files_quan
+elif max_proc_quan > 8:
+        proc_quan = 8
 else:
-        num_of_headers = int(num_of_headers)
+        proc_quan = max_proc_quan
         
-populations = input('''\nДля индивидов каких супер-/субпопуляций считать LD?
-(http://www.internationalgenome.org/faq/which-populations-are-part-your-study/)
-(несколько - через пробел)
-[all(|<enter>)|eur|jpt|jpt amr yri|...]: ''').upper().split()
-if populations == []:
-        populations = ['ALL']
-        
-genders = input('''\nДля индивидов какого пола считать LD?
-[male(|m)|female(|f)|both(|<enter>)]: ''').split()
-if genders == ['m']:
-        genders = ['male']
-elif genders == ['f']:
-        genders = ['female']
-elif genders in [[], ['both']]:
-        genders = ['male', 'female']
-elif genders not in [['male'], ['female']]:
-        print(f'{" ".join(genders)} - недопустимая опция')
-        sys.exit()
-        
-ld_filter = input('''\nОбнулять значения LD, если
-они меньше определённого порога?
-[yes(|y)|no(|n|<enter>)]: ''')
-check_input(ld_filter)
+print(f'\nПостроение LD-матриц(ы)')
+print(f'\tколичество параллельных процессов: {proc_quan}')
 
-if ld_filter in ['yes', 'y']:
-        thres_ld_measure = input('''\nМера LD для выставления порога
-[r_square(|r)|d_prime(|d)]: ''')
-        if thres_ld_measure == 'r':
-                thres_ld_measure = 'r_square'
-        elif thres_ld_measure == 'd':
-                thres_ld_measure = 'd_prime'
-        elif thres_ld_measure not in ['r_square', 'd_prime']:
-                print(f'{thres_ld_measure} - недопустимая опция')
-                sys.exit()
-                
-        ld_value_thres = float(input(f'\n{thres_ld_measure} >= '))
-        
-ld_measure = input('''\nМера LD для построения матриц
-[r_square(|r)|d_prime(|d)]: ''')
-if ld_measure == 'r':
-        ld_measure = 'r_square'
-elif ld_measure == 'd':
-        ld_measure = 'd_prime'
-elif ld_measure not in ['r_square', 'd_prime']:
-        print(f'{ld_measure} - недопустимая опция')
-        sys.exit()
-        
-#Отдельным модулем ранее были созданы
-#объекты базы данных и коллекции сэмплов.
-#Но существование объектов не означает, что
-#база уже заполнена данными 1000 Genomes.
-#Проверяем это по наличию созданных коллекций.
-#Если нет ни одной коллекции, то запускаем
-#модуль построения 1000 Genomes-базы с нуля.
-if intgen_db_obj.command('dbstats')['collections'] == 0:
-        create_intgen_db()
-        
-#Вызов функции, производящей отбор
-#сэмплов, относящихся к указанным
-#исследователем популяциям и полам.
-sample_names = get_sample_names(populations,
-                                genders)
-
-#Получение списка имён всех коллекций.
-intgen_coll_names = intgen_db_obj.list_collection_names()
-
-##Работа с исходными файлами, создание конечных папок.
-
-src_file_names = os.listdir(src_dir_path)
-for src_file_name in src_file_names:
-        src_file_base = '.'.join(src_file_name.split('.')[:-1])
-        
-        #Открытие файла исследователя на чтение.
-        with open(os.path.join(src_dir_path, src_file_name)) as src_file_opened:
-                
-                #Считываем строки-хэдеры, чтобы сместить
-                #курсор к началу основной части таблицы.
-                for header_index in range(num_of_headers):
-                        src_file_opened.readline()
-                        
-                print(f'''\n~
-\n{src_file_name}
-\nПодготовка набора refSNPIDs''')
-                
-                #refSNPIDs из обрабатываемого файла
-                #будут накапливаться во множество,
-                #чтобы не допустить повторяющихся.
-                #С группами одинаковых снипов
-                #матрицы выглядели бы абсурдно.
-                rs_ids = set()
-                
-                #Построчное прочтение основной
-                #части исходной таблицы.
-                for line in src_file_opened:
-                        
-                        #Попытка получения refSNPID из текущей строки.
-                        try:
-                                rs_id = re.search(r'rs\d+', line).group()
-                        except AttributeError:
-                                continue
-                        
-                        #Добавление идентификатора во множество.
-                        rs_ids.add(rs_id)
-                        
-        #Множества невозможно использовать
-        #в запросах к MongoDB-коллекциям.
-        #Поэтому множество идентификаторов
-        #придётся сконвертировать в список.
-        rs_ids = list(rs_ids)
-        
-        #Если снипов менее 2 штук, то как
-        #вы себе матрицу представите?:)
-        if len(rs_ids) < 2:
-                print('\tМенее двух refSNPIDs')
-                continue
-        
-        #Пользовательские refSNPID далее
-        #будут разбиты по хромосомам.
-        #В этот словарь будут накапливаться
-        #списки полученных из базы словарей,
-        #распределяясь по его разным ключам на
-        #основании принадлежности SNP хромосомам.
-        data_by_chrs = {}
-        
-        #База была спроектирована так,
-        #чтобы в каждой коллекции
-        #были данные одной хромосомы.
-        #Коллекцию сэмплов я здесь,
-        #разумеется, не имею в виду.
-        #Набор refSNPID будет
-        #искаться во всех хромосомных
-        #коллекциях по очереди.
-        #Оператор $in как бы
-        #встраивает ИЛИ между
-        #элементами искомого
-        #списка, позволяя выдать
-        #вхождения лишь его части.
-        for intgen_coll_name in intgen_coll_names:
-                if intgen_coll_name == 'samples':
-                        continue
-                elif intgen_db_obj[intgen_coll_name].count_documents({'ID': {'$in': rs_ids}}) >= 2:
-                        data_by_chrs[intgen_coll_name] = list(intgen_db_obj[intgen_coll_name].find({'ID':
-                                                                                                    {'$in':
-                                                                                                     rs_ids}}))
-                        
-        #Если в коллекциях не нашлось ни одного
-        #идентификатора, значит, с качеством текущего
-        #набора данных исследователю совсем не повезло:(.
-        #Словарь, предназначенный для похромосомного
-        #распределения данных, останется пустым.
-        if data_by_chrs == {}:
-                print(f'\tНет валидных refSNPID')
-                continue
-        
-        #2 или больше refSNPID накопилось, значит,
-        #есть смысл создавать папку, в которую
-        #будут сохраняться разделённые по хромосомам
-        #текстовые и/или графические LD-матрицы.
-        #Конструируем путь к этой папке и создаём её.
-        trg_dir_path = os.path.join(trg_top_dir_path, f'{src_file_base}_LD_matr')
-        os.mkdir(trg_dir_path)
-        
-        #Внутри этого цикла работа будет проводиться
-        #для данных каждой хромосомы по-отдельности.
-        for chr_name in data_by_chrs:
-                
-                #Чтобы потом проще было визуально
-                #оценивать влияние физического
-                #расстояния на LD, refSNPIDs надо
-                #отсортировать по геномным позициям.
-                #Сортируем список словарей текущей
-                #хромосомы по значениям ключа POS.
-                #Итоговый порядок элементов сильно
-                #зависит от типа сортируемых данных.
-                #Позиции предусмотрительно были
-                #сконвертированы в int ещё во
-                #время формирования базы,
-                #поэтому на данном этапе
-                #это делать уже не нужно.
-                data_by_chrs[chr_name].sort(key=lambda snp_data: snp_data['POS'])
-                
-                #Получение отсортированных списков позиций и
-                #идущих в соответствующем порядке refSNPIDs.
-                poss_srtd = [snp_data['POS'] for snp_data in data_by_chrs[chr_name]]
-                rs_ids_srtd = [snp_data['ID'] for snp_data in data_by_chrs[chr_name]]
-                
-                #Определение количества refSNPIDs, а,
-                #значит, и refSNPID-содержащих словарей.
-                snps_quan = len(rs_ids_srtd)
-                
-                print(f'\n{chr_name}: формирование LD-матрицы')
-                
-                #Основой текстовой или
-                #графической матрицы
-                #будет двумерный массив
-                #такой структуры:
-                '''
-                 0    0    0    ...
-                val   0    0    ...
-                val  val   0    ...
-                ...  ...  ...   ...
-                '''
-                
-                #Построение шаблона двумерного массива
-                #размером n x n, состоящего из нулей.
-                #Нули в дальнейшем могут заменяться на значения LD.
-                ld_two_dim = [[0 for cell_index in range(snps_quan)] for row_index in range(snps_quan)]
-                
-                #В случае, если будет строиться диаграмма,
-                #такой же шаблон понадобится для создания
-                #матрицы сопутствующей информации.
-                if 'color_pal' in locals():
-                        info_two_dim = copy.deepcopy(ld_two_dim)
-                
-                #Перебор чисел, которые будут представлять
-                #собой индексы строк двумерного массива.
-                for row_index in range(snps_quan):
-                        
-                        #Перебор чисел, которые будут служить
-                        #индексами столбцов двумерного массива.
-                        for col_index in range(snps_quan):
-                                
-                                #Матрица, в принципе, может
-                                #быть квадратом, состоящим
-                                #из двух одинаковых по форме
-                                #и содержимому прямоугольных
-                                #треугольников, разделённых
-                                #диагональю 0-ячеек.
-                                #Думаю, разумнее оставить лишь
-                                #один из этих треугольников.
-                                #Получаем только те значения,
-                                #которые соответствуют ячейкам
-                                #двумерного массива, индекс строки
-                                #которых больше индекса столбца.
-                                if row_index > col_index:
-                                        
-                                        #Отбор фазированных генотипов по сэмплам.
-                                        snp_1_phased_genotypes = get_phased_genotypes(data_by_chrs[chr_name][row_index],
-                                                                                      sample_names)
-                                        snp_2_phased_genotypes = get_phased_genotypes(data_by_chrs[chr_name][col_index],
-                                                                                      sample_names)
-                                        
-                                        #Обращение к оффлайн-калькулятору для
-                                        #получения словаря с r2, D' и частотами
-                                        #минорного аллеля текущей пары SNP.
-                                        trg_vals = ld_calc(snp_1_phased_genotypes,
-                                                           snp_2_phased_genotypes)
-                                        
-                                        #Для диаграммы каждое значение
-                                        #LD аннотируется: параллельно с
-                                        #накоплением массива LD-значений
-                                        #растёт массив дополнительной
-                                        #информации по каждой паре SNP.
-                                        if 'info_two_dim' in locals():
-                                                info_two_dim[row_index][col_index] = f'''
-r2: {trg_vals["r_square"]}<br>
-D': {trg_vals["d_prime"]}<br>
-abs_dist: {abs(poss_srtd[col_index] - poss_srtd[row_index])}<br><br>
-x.hg38_pos: {poss_srtd[col_index]}<br>
-y.hg38_pos: {poss_srtd[row_index]}<br><br>
-x.rsID: {rs_ids_srtd[col_index]}<br>
-y.rsID: {rs_ids_srtd[row_index]}<br><br>
-x.alt_freq: {trg_vals['snp_2_alt_freq']}<br>
-y.alt_freq: {trg_vals['snp_1_alt_freq']}
-'''
-                                                
-                                        #Исследователь мог установить нижний порог LD.
-                                        #Соответствующий блок кода неспроста расположен после
-                                        #блока накопления аннотаций: на диаграммах клеточки с
-                                        #подпороговыми LD будут закрашены как нулевые, но
-                                        #зато при наведении курсора там отобразятся настоящие
-                                        #LD-значения, как раз извлекаемые из массива с аннотациями.
-                                        #При обратном расположении этих блоков аннотации подпороговых
-                                        #LD не сохранялись бы, ведь в блоке фильтрации - continue.
-                                        if 'thres_ld_measure' in locals():
-                                                if trg_vals[thres_ld_measure] < ld_value_thres:
-                                                        continue
-                                                
-                                        #Если значение LD не отсеилось как
-                                        #подпороговое, то попадёт в LD-матрицу:
-                                        #0-ячейка будет заменена на найденное
-                                        #значение LD выбранной величины.
-                                        ld_two_dim[row_index][col_index] = trg_vals[ld_measure]
-                                        
-                #Исследователь выбрал опцию создавать
-                #текстовые версии LD-матриц.
-                if output in ['table', 't', 'both', '']:
-                        
-                        print(f'{chr_name}: сохранение текстовой LD-матрицы')
-                        
-                        #Создание текстового конечного файла.
-                        #Прописываем в него хэдер с общими
-                        #характеристиками таблицы, пустую
-                        #строку и две шапки: одна - с
-                        #refSNPIDs, другая - с позициями.
-                        #Потом прописываем LD-строки,
-                        #добавляя перед каждой из
-                        #них тоже refSNPID и позицию.
-                        tsv_file_name = f'{src_file_base}_{chr_name}_{ld_measure[0]}_tab.tsv'
-                        with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
-                                tab, poss_srtd = '\t', list(map(lambda pos: str(pos), poss_srtd))
-                                tsv_file_opened.write(f'##General\tinfo:\t{ld_measure}\t{chr_name}\t{tab.join(populations)}\t{tab.join(genders)}\n\n')
-                                tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
-                                tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
-                                for row_index in range(snps_quan):
-                                        line = '\t'.join([str(cell) for cell in ld_two_dim[row_index]]) + '\n'
-                                        tsv_file_opened.write(rs_ids_srtd[row_index] + '\t' +
-                                                              poss_srtd[row_index] + '\t' +
-                                                              line)
-                                        
-                #Если переменная, ссылающаяся на значение, которое
-                #должно стать одним из аргументов функции построения
-                #диаграммы, существует, то это означает, что
-                #исследователь предпочёл LD-матрицы визуализировать.
-                if 'color_pal' in locals():
-                        
-                        print(f'{chr_name}: визуализация LD-матрицы')
-                        
-                        #Plotly позволяет строить тепловые карты
-                        #как без надписей, так и с таковыми.
-                        #Под надписями в рамках нашей задачи
-                        #подразумеваются значения LD в квадратиках
-                        #тепловой карты и refSNPID-лейблы осей X, Y.
-                        #Допустим, исследователь предпочёл не выводить
-                        #на диаграмму никаких текстовых данных.
-                        #Тогда нужно будет создать обычную,
-                        #не аннотированную, тепловую карту
-                        #и подавить размещение лейблов осей.
-                        #Для построения объекта тепловой карты,
-                        #в квадратиках которой не будет текста,
-                        #программа использует класс Heatmap.
-                        #Класс принимает посчитанные LD и другую
-                        #информацию по парам SNPs, заданную
-                        #исследователем цветовую схему и два
-                        #константных аргумента: наличие расстояния
-                        #между квадратиками, отсутствие цветовой шкалы.
-                        #Объект диаграммы дополняется словареподобным
-                        #объектом класса Layout с настройками
-                        #осей: для начала - запретом вывода лейблов.
-                        if texts in ['no', 'n', '']:
-                                trace = go.Heatmap(z=ld_two_dim,
-                                                   hovertext=info_two_dim,
-                                                   hoverinfo='text',
-                                                   xgap=1,
-                                                   ygap=1,
-                                                   colorscale=color_pal,
-                                                   showscale=False)
-                                layout = go.Layout(xaxis={'showticklabels': False},
-                                                   yaxis={'showticklabels': False})
-                                ld_heatmap = go.Figure(data=trace,
-                                                       layout=layout)
-                                
-                        #Исследователь дал добро выводить на диаграмму надписи.
-                        else:
-                                
-                                #Для создания тепловых карт со значениями в
-                                #квадратиках (аннотированных) Plotly предоставляет
-                                #высокоуровневую функцию create_annotated_heatmap.
-                                #Объект аннотированной тепловой карты представляет
-                                #собой структуру со свойствами словаря, в которую
-                                #вложены структуры со свойствами словарей и
-                                #списков, содержащие параметры диаграммы.
-                                #С помощью аргументов create_annotated_heatmap
-                                #можно менять настройки диаграммы, находящиеся
-                                #в значении ключа верхнего уровня 'data'.
-                                #Самые основные аргументы этой функции - массивы
-                                #с LD-данными, refSNPIDs в качестве лейблов по X, Y
-                                #и дополнительной информацией по каждой паре SNPs.
-                                #Аргумент, который определяется на этапе интерактивного
-                                #диалога исследователем - цветовая схема тепловой карты.
-                                #Не изменяемый в рамках диалога аргумент - наличие
-                                #разделительных линий между квадратиками.
-                                #В create_annotated_heatmap по умолчанию
-                                #не допускается вывод цветовой шкалы.
-                                #Так и оставим ради экономии пространства.
-                                ld_heatmap = ff.create_annotated_heatmap(ld_two_dim,
-                                                                         x=rs_ids_srtd,
-                                                                         y=rs_ids_srtd,
-                                                                         hovertext=info_two_dim,
-                                                                         hoverinfo='text',
-                                                                         xgap=1,
-                                                                         ygap=1,
-                                                                         colorscale=color_pal)
-                                
-                                #Исследователь кастомизировал размер
-                                #шрифта значений внутри квадратиков.
-                                #Тогда в каждый подсловарь структуры
-                                #'annotations' будет добавлена пара
-                                #ключ-значение с данным размером.
-                                if val_font_size != 'default':
-                                        for ann_num in range(len(ld_heatmap['layout']['annotations'])):
-                                                ld_heatmap['layout']['annotations'][ann_num]['font']['size'] = val_font_size
-                                                
-                                #При желании, исследователь мог задать недефолтное
-                                #значение параметра размера шрифта лейблов осей.
-                                if lab_font_size != 'default':
-                                        ld_heatmap['layout']['xaxis']['tickfont'] = {'size': lab_font_size}
-                                        ld_heatmap['layout']['yaxis']['tickfont'] = {'size': lab_font_size}
-                                        
-                        #Заголовок будет добавляться в любую
-                        #диаграмму - обычную и аннотированную.
-                        #Он должен содержать в себе единые для
-                        #всей тепловой карты характеристики:
-                        #величину LD (r2 или D'), задающуя
-                        #цвета квадратиков, номер хромосомы, в
-                        #которой локализуются SNP, формирующие
-                        #оси диаграммы, а также названия
-                        #популяций и полов, по которым ранее
-                        #отбирались сэмплы для рассчёта LD.
-                        ld_heatmap['layout']['title'] = {'text':
-f'''defines_color: {ld_measure} ░
-chrom: {chr_name} ░
-populations: {", ".join(populations)} ░
-genders: {", ".join(genders)}'''}
-                        
-                        #В тепловых картах Plotly, обычных и аннотированных,
-                        #ось Y по умолчанию направлена снизу вверх.
-                        #Чтобы ориентация тепловых карт, создаваемых
-                        #этой программой, была такая же, как в
-                        #LDMatrix, переворачиваем диаграмму по Y.
-                        #Параметры осей заложены в структуры,
-                        #принадлежащие ключу верхнего уровня 'layout'.
-                        ld_heatmap['layout']['yaxis']['autorange'] = 'reversed'
-                        
-                        #Построение диаграммы и её сохранение в HTML.
-                        html_file_path = f'{os.path.join(trg_dir_path, src_file_base)}_{chr_name}_{ld_measure[0]}_diag.html'
-                        ld_heatmap.write_html(html_file_path)
-                        
-client.close()
+#Параллельный запуск создания матриц.
+with Pool(proc_quan) as pool_obj:
+        pool_obj.map(prep_single_proc.create_matrix, src_file_names)
