@@ -1,4 +1,4 @@
-__version__ = 'V10.0'
+__version__ = 'V10.1'
 
 def add_args():
         '''
@@ -66,6 +66,8 @@ pysam и plotly (см. документацию).
                                help='Цветовая палитра тепловой карты (https://github.com/PlatonB/ld-tools#подходящие-цветовые-палитры)')
         argparser.add_argument('-k', '--font-size', metavar='[None]', dest='font_size', type=int,
                                help='Размер шрифта надписей на тепловой карте (plotly: по умолчанию - 12; больше диаграмма - мельче делайте шрифт)')
+        argparser.add_argument('-q', '--square-shape', dest='square_shape', action='store_true',
+                               help='Квадратная форма тепловой карты')
         argparser.add_argument('-s', '--dont-disp-footer', dest='dont_disp_footer', action='store_true',
                                help='Не выводить на тепловую карту информацию о программе')
         argparser.add_argument('-p', '--max-proc-quan', metavar='[4]', default=4, dest='max_proc_quan', type=int,
@@ -119,6 +121,7 @@ class PrepSingleProc():
                 self.disp_letters = args.disp_letters
                 self.color_pal = args.color_pal
                 self.font_size = args.font_size
+                self.square_shape = args.square_shape
                 self.dont_disp_footer = args.dont_disp_footer
                 
         def create_matrix(self, src_file_name):
@@ -384,12 +387,24 @@ abs_dist: {abs(poss_srtd[col_index] - poss_srtd[row_index])}<br><br>
                                                         ld_heatmap = go.Figure(data=trace,
                                                                                layout=layout)
                                                         
-                                                #Надписи, отличные от
-                                                #LD-значений и rsIDs.
-                                                #Заголовок создастся
-                                                #в любом случае, а вывод
-                                                #футера регулируется
-                                                #соответствующим флагом.
+                                                #Опциональное приведение
+                                                #диаграммы к квадратной форме.
+                                                if self.square_shape:
+                                                        ld_heatmap.update_layout(xaxis_constraintoward='left',
+                                                                                 yaxis_scaleanchor='x',
+                                                                                 yaxis_scaleratio = 1,
+                                                                                 plot_bgcolor='rgba(0,0,0,0)')
+                                                        
+                                                #Следующие настройки будут
+                                                #касаться, в основном, надписей,
+                                                #отличных от LD-значений и
+                                                #rsIDs - заголовка и футера.
+                                                #Чтобы размещать футер, пришлось
+                                                #пойти на небольшую хитрость -
+                                                #выделить под него тайтл оси X.
+                                                #Помимо всего прочего, переворачиваем
+                                                #диаграмму по Y ради визуальной
+                                                #совместимости с хитмэпами LDmatrix.
                                                 title = f'''
 defines color: {self.ld_measure} ░
 LD threshold: {self.ld_low_thres} ░
