@@ -1,4 +1,4 @@
-__version__ = 'V10.1'
+__version__ = 'V10.2'
 
 def add_args():
         '''
@@ -60,6 +60,8 @@ pysam и plotly (см. документацию).
                                help='Нижний порог LD (подпороговые значения приравняются к нулю)')
         argparser.add_argument('-o', '--matrix-type', metavar='[heatmap]', choices=['heatmap', 'table', 'both'], default='heatmap', dest='matrix_type', type=str,
                                help='{heatmap, table, both} Вид матриц значений LD: графические, текстовые, те и другие')
+        argparser.add_argument('-j', '--heatmap-json', dest='heatmap_json', action='store_true',
+                               help='Сохранение объектов тепловых карт в виде JSON (полезно для дебага)')
         argparser.add_argument('-i', '--disp-letters', dest='disp_letters', action='store_true',
                                help='Вывод LD-значений и лейблов осей на тепловую карту')
         argparser.add_argument('-c', '--color-pal', metavar='[greens]', default='greens', dest='color_pal', type=str,
@@ -118,6 +120,7 @@ class PrepSingleProc():
                 self.ld_measure = args.ld_measure
                 self.ld_low_thres = args.ld_low_thres
                 self.matrix_type = args.matrix_type
+                self.heatmap_json = args.heatmap_json
                 self.disp_letters = args.disp_letters
                 self.color_pal = args.color_pal
                 self.font_size = args.font_size
@@ -328,6 +331,14 @@ abs_dist: {abs(poss_srtd[col_index] - poss_srtd[row_index])}<br><br>
                                                                 #значение LD выбранной величины.
                                                                 ld_two_dim[row_index][col_index] = trg_vals[self.ld_measure]
                                                                 
+                                        #Стремящееся быть информативным
+                                        #название конечного файла.
+                                        #Какое к нему далее будет
+                                        #пристыковано расширение -
+                                        #зависит от выбранного
+                                        #исследователем формата.
+                                        trg_file_base = f'chr{chrom}_{self.ld_measure[0]}_{src_file_base}'
+                                        
                                         #Визуализация матрицы с помощью plotly.
                                         if self.matrix_type in ['heatmap', 'both']:
                                                 
@@ -423,10 +434,16 @@ populations: {", ".join(self.pop_names)}
                                                         ld_heatmap.update_layout(xaxis_title_text=footer,
                                                                                  xaxis_title_font_size=10)
                                                         
+                                                #Сохранение всех данных диаграммы в
+                                                #JSON, если это необходимо исследователю.
+                                                if self.heatmap_json:
+                                                        debug_file_name = trg_file_base + '.json'
+                                                        ld_heatmap.write_json(os.path.join(trg_dir_path, debug_file_name),
+                                                                              pretty=True)
+                                                        
                                                 #Сохранение диаграммы в HTML.
-                                                html_file_name = f'{chrom}_{self.ld_measure[0]}_{src_file_base}.html'
-                                                html_file_path = os.path.join(trg_dir_path, html_file_name)
-                                                ld_heatmap.write_html(html_file_path)
+                                                html_file_name = trg_file_base + '.html'
+                                                ld_heatmap.write_html(os.path.join(trg_dir_path, html_file_name))
                                                 
                                         #Исследователь выбрал опцию создавать
                                         #табличные варианты LD-матриц.
@@ -436,18 +453,18 @@ populations: {", ".join(self.pop_names)}
                                                 #Прописываем в него хэдер с общими
                                                 #характеристиками матрицы, пустую
                                                 #строку и две шапки: одна - с
-                                                #refSNPIDs, другая - с позициями.
+                                                #rsIDs, другая - с позициями.
                                                 #Потом прописываем LD-строки,
                                                 #добавляя перед каждой из
-                                                #них тоже refSNPID и позицию.
-                                                tsv_file_name = f'{chrom}_{self.ld_measure[0]}_{src_file_base}.tsv'
+                                                #них тоже rsID и позицию.
+                                                tsv_file_name = trg_file_base + '.tsv'
                                                 with open(os.path.join(trg_dir_path, tsv_file_name), 'w') as tsv_file_opened:
                                                         tab, poss_srtd = '\t', list(map(lambda pos: str(pos), poss_srtd))
-                                                        tsv_file_opened.write(f'##General\tinfo:\t{self.ld_measure}\t{chrom}\t{tab.join(self.pop_names)}\t{tab.join(self.gend_names)}\n\n')
+                                                        tsv_file_opened.write(f'##General\tinfo:\t{self.ld_measure}\tchr{chrom}\t{tab.join(self.pop_names)}\t{tab.join(self.gend_names)}\n\n')
                                                         tsv_file_opened.write('RefSNPIDs\t\t' + '\t'.join(rs_ids_srtd) + '\n')
                                                         tsv_file_opened.write('\tPositions\t' + '\t'.join(poss_srtd) + '\n')
                                                         for row_index in range(snps_quan):
-                                                                line = '\t'.join([str(cell) for cell in ld_two_dim[row_index]]) + '\n'
+                                                                line = '\t'.join(map(str, ld_two_dim[row_index])) + '\n'
                                                                 tsv_file_opened.write(rs_ids_srtd[row_index] + '\t' +
                                                                                       poss_srtd[row_index] + '\t' +
                                                                                       line)
