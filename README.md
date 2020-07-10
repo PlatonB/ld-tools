@@ -56,6 +56,7 @@ python3 ld_triangle -h
 
 ## Результаты.
 - TSV. Формат по умолчанию. Это - обычные таблицы, удобные и информативные для клиницистов, в то же время, легко обрабатываемые [скриптами](https://github.com/PlatonB/bioinformatic-python-scripts). Ключевые столбцы - r2, D' и дистанция между найденными и запрашиваемой мутациями. Полезное дополнение - базовые аннотации каждой мутации (в том числе запрашиваемой): позиция, идентификатор, референсный и альтернативный аллели, тип, а также частота альтернативного аллеля.
+![Пример TSV](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/LD_area_TSV_output.png)
 - JSON. По содержанию совпадает с TSV, но больше ориентирован на программистов.
 ![Пример JSON](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/LD_area_JSON_output.png)
 - Набор одних лишь rsIDs. Такая разновидность вывода лучше всего подходит для дальнейшего аннотирования мутаций специализированными программами ([_high_perf_bio_](https://github.com/PlatonB/high-perf-bio), _Ensembl VEP_ и др.).
