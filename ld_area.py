@@ -1,4 +1,4 @@
-__version__ = 'V10.0'
+__version__ = 'V10.1'
 
 def add_args():
         '''
@@ -194,9 +194,10 @@ class PrepSingleProc():
                                       'ref',
                                       'alt',
                                       'type',
-                                      'alt_freq']
-                        query_header_row = list(map(lambda header_cell: f'quer.{header_cell}', header_row))
-                        oppos_header_row = list(map(lambda header_cell: f'lnkd.{header_cell}', header_row))
+                                      'alt_freq',
+                                      'r2',
+                                      "D'",
+                                      'dist']
                         
                         #Далее работа будет проводиться
                         #для данных каждой хромосомы
@@ -270,12 +271,12 @@ class PrepSingleProc():
                                                                         continue
                                                         query_snp_alt_freq = round(query_snp_genotypes.count(1) /
                                                                                    len(query_snp_genotypes), 4)
-                                                        query_snp_ann = [str(query_snp_data.pos),
+                                                        query_snp_ann = [query_snp_data.pos,
                                                                          query_snp_data.id,
                                                                          query_snp_data.ref,
                                                                          ','.join(query_snp_data.alts),
                                                                          ','.join(query_snp_data.info['VT']),
-                                                                         str(query_snp_alt_freq)]
+                                                                         query_snp_alt_freq] + ['quer'] * 3
                                                         
                                                         #Открываем конечный файл на запись
                                                         #и проделываем кропотливую работу по
@@ -287,13 +288,11 @@ class PrepSingleProc():
                                                                         trg_file_opened.write(query_snp_data.id + '\n')
                                                                 elif self.trg_file_type == 'tsv':
                                                                         trg_file_opened.write(ucsc_header_line + '\n')
-                                                                        trg_file_opened.write('#' + '\t'.join(header_row +
-                                                                                                              ['r2', "D'", 'dist']) + '\n')
-                                                                        trg_file_opened.write('\t'.join(query_snp_ann +
-                                                                                                        ['quer'] * 3) + '\n')
+                                                                        trg_file_opened.write('#' + '\t'.join(header_row) + '\n')
+                                                                        trg_file_opened.write('\t'.join(map(str, query_snp_ann)) + '\n')
                                                                 elif self.trg_file_type == 'json':
                                                                         trg_obj = [dict(zip(meta_keys, meta_vals)),
-                                                                                   dict(zip(query_header_row, query_snp_ann))]
+                                                                                   dict(zip(header_row, query_snp_ann))]
                                                                         
                                                                 #Перебор 1000-Genomes-SNPs
                                                                 #в пределах окна, центром которого
@@ -362,8 +361,7 @@ class PrepSingleProc():
                                                                         if self.trg_file_type == 'tsv':
                                                                                 trg_file_opened.write('\t'.join(map(str, oppos_snp_ann)) + '\n')
                                                                         elif self.trg_file_type == 'json':
-                                                                                trg_obj.append(dict(zip(oppos_header_row + ['r2', "D'", 'dist'],
-                                                                                                        oppos_snp_ann)))
+                                                                                trg_obj.append(dict(zip(header_row, oppos_snp_ann)))
                                                                                 
                                                                 #При подготовке JSON-вывода
                                                                 #результаты должны были накапливаться
