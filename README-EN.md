@@ -26,3 +26,18 @@ conda install python=3.7 pysam=0.15.4 plotly
 - Working with X and Y chromosomes can be [problematic](https://github.com/samtools/bcftools/issues/1154).
 - The first launch requires a stable Internet connection.
 - Large _ld-triangle_'s heatmaps may not be rendered.
+
+## Input.
+- Folder with plain tables. They must contain a column with rsIDs. The position of this column can be any. The number of headers is arbitrary, but must be uniform between the tables.
+- Folder for 1000 Genomes data. The data shall be downloaded and processed automatically at the first launch.
+
+## Output.
+### ld_area.
+A separate file is created for each variant. Output file contains the source variant and all variants selected for it according to the specified conditions.
+- TSV. Default choice. Contains r2, D' and the distance between found and requested variant, plus basic annotations of each variant.
+- JSON. It is similar to TSV in content, but is more scripting oriented.
+- Column of rsIDs. Minimalistic output for annotation from scratch.
+
+### ld_triangle.
+- LD matrix as heatmap. For advanced usage it is possible to derive diagram object in JSON format.
+- LD matrix as table.
