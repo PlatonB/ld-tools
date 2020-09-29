@@ -1,66 +1,4 @@
-__version__ = 'V10.2'
-
-def add_args():
-        '''
-        Работа с аргументами командной строки.
-        '''
-        argparser = ArgumentParser(description=f'''
-Программа ищет в пределах фланков варианты,
-обладающие надпороговым значением неравновесия
-по сцеплению с каждым запрашиваемым вариантом.
-
-Автор: Платон Быкадоров (platon.work@gmail.com), 2018-2020
-Версия: {__version__}
-Лицензия: GNU General Public License version 3
-Поддержать проект: https://www.tinkoff.ru/rm/bykadorov.platon1/7tX2Y99140/
-Документация: https://github.com/PlatonB/ld-tools/blob/master/README.md
-Багрепорты/пожелания/общение: https://github.com/PlatonB/ld-tools/issues
-
-Перед запуском программы нужно
-установить pysam (см. документацию).
-
-Поддерживаемые исходные файлы - таблицы,
-содержащие столбец с набором rsIDs.
-Если таких столбцов - несколько,
-программа будет использовать самый левый.
-
-Инструментарий ld_tools использет для
-вычисления LD данные проекта 1000 Genomes.
-Их скачивание и процессинг может занять много
-времени, но осуществляется лишь однократно.
-
-Условные обозначения в справке по CLI:
-- краткая форма с большой буквы - обязательный аргумент;
-- в квадратных скобках - значение по умолчанию;
-- в фигурных скобках - перечисление возможных значений.
-''',
-                                   formatter_class=RawTextHelpFormatter)
-        argparser.add_argument('-S', '--src-dir-path', metavar='str', dest='src_dir_path', type=str,
-                               help='Путь к папке с исходными таблицами')
-        argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
-                               help='Путь к папке для данных 1000 Genomes')
-        argparser.add_argument('-t', '--trg-top-dir-path', metavar='[None]', dest='trg_top_dir_path', type=str,
-                               help='Путь к папке для результатов (по умолчанию - путь к исходной папке)')
-        argparser.add_argument('-m', '--meta-lines-quan', metavar='[0]', default=0, dest='meta_lines_quan', type=int,
-                               help='Количество строк метаинформации, включая шапку, в начале каждой исходной таблицы')
-        argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
-                               help='Не проверять укомплектованность данных 1000 Genomes (сразу приступать к основным вычислениям)')
-        argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
-                               help='{male, female, both} Гендерная принадлежность сэмплов 1000 Genomes')
-        argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
-                               help='Популяционная принадлежность сэмплов 1000 Genomes (через запятую без пробела; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
-        argparser.add_argument('-w', '--flank-size', metavar='[100000]', default=100000, dest='flank_size', type=int,
-                               help='Размер *каждого* из фланков, в пределах которых надо искать неравновесно сцепленные варианты')
-        argparser.add_argument('-l', '--ld-thres-measure', metavar='[r_square]', choices=['r_square', 'd_prime'], default='r_square', dest='ld_thres_measure', type=str,
-                               help='{r_square, d_prime} Мера для выставления нижнего порога LD')
-        argparser.add_argument('-z', '--ld-low-thres', metavar='[0.5]', default=0.5, dest='ld_low_thres', type=float,
-                               help='Нижний порог LD')
-        argparser.add_argument('-o', '--trg-file-type', metavar='[tsv]', choices=['tsv', 'json', 'rsids'], default='tsv', dest='trg_file_type', type=str,
-                               help='{tsv, json, rsids} Формат конечных файлов')
-        argparser.add_argument('-p', '--max-proc-quan', metavar='[4]', default=4, dest='max_proc_quan', type=int,
-                               help='Максимальное количество параллельно обрабатываемых таблиц')
-        args = argparser.parse_args()
-        return args
+__version__ = 'V11.0'
 
 def build_ucsc_header(header_key, header_val):
         '''
@@ -385,16 +323,17 @@ class PrepSingleProc():
                                                 #программа удалит.
                                                 if empty_res:
                                                         os.remove(trg_file_path)
-                                                                
+                                                        
 ####################################################################################################
 
-import sys, os, re, sqlite3, json
+import sys, locale, os, re, sqlite3, json
 
 #Подавление формирования питоновского кэша с
 #целью предотвращения искажения результатов.
 sys.dont_write_bytecode = True
 
-from argparse import ArgumentParser, RawTextHelpFormatter
+from cli.ld_area_cli_ru import add_args_ru
+from cli.ld_area_cli_en import add_args_en
 from backend.prep_intgen_data import prep_intgen_data
 from backend.get_sample_names import get_sample_names
 from multiprocessing import Pool
@@ -406,7 +345,10 @@ from backend.calc_ld import calc_ld
 #создание экземпляра содержащего
 #ключевую функцию класса, определение
 #оптимального количества процессов.
-args = add_args()
+if locale.getdefaultlocale()[0][:2] == 'ru':
+        args = add_args_ru(__version__)
+else:
+        args = add_args_en(__version__)
 prep_single_proc = PrepSingleProc(args)
 max_proc_quan = args.max_proc_quan
 src_file_names = os.listdir(prep_single_proc.src_dir_path)
@@ -418,8 +360,8 @@ elif max_proc_quan > 8:
 else:
         proc_quan = max_proc_quan
         
-print(f'\nПоиск вариантов в неравновесии по сцеплению')
-print(f'\tколичество параллельных процессов: {proc_quan}')
+print(f'\nSelecting variants in LD and in window')
+print(f'\tnumber of parallel processes: {proc_quan}')
 
 #Параллельный запуск создания коллекций.
 with Pool(proc_quan) as pool_obj:
