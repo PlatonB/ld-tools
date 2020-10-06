@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 class NotRsIdError(Exception):
         '''
@@ -36,7 +36,7 @@ def check_rs_id(rs_id, cursor):
         на валидность, получение
         его хромосомы и позиции.
         '''
-        if re.search(r'rs\d+', rs_id) is None:
+        if re.search(r'rs\d+\b', rs_id) is None:
                 raise NotRsIdError(rs_id)
         cursor.execute(f'SELECT CHROM, POS FROM variants WHERE ID = "{rs_id}"')
         var_basic_info = cursor.fetchone()
@@ -46,7 +46,7 @@ def check_rs_id(rs_id, cursor):
 
 ####################################################################################################
 
-import sys, locale, os, re, sqlite3
+import sys, locale, os, sqlite3, re
 from tabulate import tabulate
 
 #Подавление формирования питоновского кэша с
