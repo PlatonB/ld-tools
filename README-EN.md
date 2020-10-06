@@ -1,13 +1,14 @@
 ## Introduction.
 _ld-tools_ is a self-written analogue of _LDlink_ and _HaploReg_, focused on non-server use. Created in _Python_ with _SQL_ elements.
 
-| Program | Destination |
-| ------- | ----------- |
-| _ld_area_ | finds for each variant all variants inside two thresholds: not lower than a certain value of LD and not further than the specified flank size |
+| Program | Main features |
+| ------- | ------------- |
+| _ld_area_ | selects for each variant all variants inside two thresholds: not lower than a certain value of LD and not further than the specified flank size |
+| _ld_lite_ | outputs LD and distance for two variants |
 | _ld_triangle_ | builds matrices of LD values of all possible variant pairs |
 
 ## Dependencies.
-The recommended method of dependency resolving is using Conda with Bioconda channel connected.
+The recommended method of dependency resolving is using _Conda_ with _Bioconda_ channel connected.
 ```
 conda config --add channels defaults
 ```
@@ -18,7 +19,19 @@ conda config --add channels bioconda
 conda config --add channels conda-forge
 ```
 ```
-conda install python=3.7 pysam=0.15.4 plotly
+conda install python=3.7 pysam=0.15.4 tabulate plotly
+```
+
+## Deployment.
+1. [Download](https://github.com/PlatonB/ld-tools/archive/master.zip) the archive with the program.
+2. Unpack it to any place.
+3. In the terminal, navigate to the unzipped folder.
+```
+cd /path/to/ld-tools-master
+```
+4. Print the help for the component you are interested in.
+```
+python3 ld_triangle -h
 ```
 
 ## Restrictions.
