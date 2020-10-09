@@ -52,5 +52,8 @@ A separate file is created for each variant. Output file contains the source var
 - Column of rsIDs. Minimalistic output for annotation from scratch.
 
 ### ld_triangle.
-- LD matrix as heatmap. For advanced usage it is possible to derive diagram object in JSON format.
-- LD matrix as table.
+Displaying the results twice for each pair of variants is hardly useful, so it was decided to create triangular rather than square matrices.
+- LD matrix as heatmap. The larger value of the pair's LD, the darker color of the cell is drawn. Hovertext with LD values, distance and basic annotations is available for each cell. The program sorts the variants by position, so the whole matrix becomes ordered by the distance within the pairs.
+![Example of a heatmap with explanation of sorting elements by distance](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/ld_triangle_annotated_heatmap_with_en_explanations.png)
+For advanced usage it is possible to derive diagram object in JSON format.
+- LD matrix as table. Contains LD values of a researcher-defined measure without any additional information.
