@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 from argparse import ArgumentParser, RawTextHelpFormatter
 
@@ -40,12 +40,13 @@ def add_args_ru(ver):
         argparser.add_argument('rs_id_2', metavar='str', type=str,
                                help='rsID 2-го варианта')
         argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
-                               help='Путь к папке для данных 1000 Genomes')
+                               help='Путь к папке для данных 1000G')
         argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
-                               help='Не проверять укомплектованность данных 1000 Genomes (сразу приступать к основным вычислениям)')
+                               help='Не проверять укомплектованность данных 1000G (сразу приступать к основным вычислениям)')
         argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
-                               help='{male, female, both} Гендерная принадлежность сэмплов 1000 Genomes')
+                               help='{male, female, both} Гендерная принадлежность сэмплов 1000G (для отбора определяющих LD генотипов)')
         argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
-                               help='Популяционная принадлежность сэмплов 1000 Genomes (через запятую без пробела; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
+                               help='''Популяционная принадлежность сэмплов 1000G (через запятую без пробела; для отбора определяющих LD генотипов;
+https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)''')
         args = argparser.parse_args()
         return args

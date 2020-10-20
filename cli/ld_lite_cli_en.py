@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 from argparse import ArgumentParser, RawTextHelpFormatter
 
@@ -39,12 +39,13 @@ CLI help legend:
         argparser.add_argument('rs_id_2', metavar='str', type=str,
                                help='rsID of the second variant')
         argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
-                               help='Path to folder for 1000 Genomes data')
+                               help='Path to folder for 1000G data')
         argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
-                               help='Do not check 1000 Genomes data completeness (start main calculations immediately)')
+                               help='Do not check 1000G data completeness (start main calculations immediately)')
         argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
-                               help='{male, female, both} Belonging of 1000 Genomes samples to genders')
+                               help='{male, female, both} Belonging of 1000G samples to genders (for selection of genotypes that determine LD)')
         argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
-                               help='Belonging of 1000 Genomes samples to populations (separated by commas without space; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
+                               help='''Belonging of 1000G samples to populations (separated by commas without space; for selection of genotypes that determine LD;
+https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)''')
         args = argparser.parse_args()
         return args

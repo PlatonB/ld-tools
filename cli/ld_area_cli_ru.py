@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 from argparse import ArgumentParser, RawTextHelpFormatter
 
@@ -38,17 +38,18 @@ def add_args_ru(ver):
         argparser.add_argument('-S', '--src-dir-path', metavar='str', dest='src_dir_path', type=str,
                                help='Путь к папке с исходными таблицами')
         argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
-                               help='Путь к папке для данных 1000 Genomes')
+                               help='Путь к папке для данных 1000G')
         argparser.add_argument('-t', '--trg-top-dir-path', metavar='[None]', dest='trg_top_dir_path', type=str,
                                help='Путь к папке для результатов (по умолчанию - путь к исходной папке)')
         argparser.add_argument('-m', '--meta-lines-quan', metavar='[0]', default=0, dest='meta_lines_quan', type=int,
                                help='Количество строк метаинформации, включая шапку, в начале каждой исходной таблицы')
         argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
-                               help='Не проверять укомплектованность данных 1000 Genomes (сразу приступать к основным вычислениям)')
+                               help='Не проверять укомплектованность данных 1000G (сразу приступать к основным вычислениям)')
         argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
-                               help='{male, female, both} Гендерная принадлежность сэмплов 1000 Genomes')
+                               help='{male, female, both} Гендерная принадлежность сэмплов 1000G (для отбора определяющих LD генотипов)')
         argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
-                               help='Популяционная принадлежность сэмплов 1000 Genomes (через запятую без пробела; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
+                               help='''Популяционная принадлежность сэмплов 1000G (через запятую без пробела; для отбора определяющих LD генотипов;
+https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)''')
         argparser.add_argument('-w', '--flank-size', metavar='[100000]', default=100000, dest='flank_size', type=int,
                                help='Размер *каждого* из фланков, в пределах которых надо искать неравновесно сцепленные варианты')
         argparser.add_argument('-l', '--ld-thres-measure', metavar='[r_square]', choices=['r_square', 'd_prime'], default='r_square', dest='ld_thres_measure', type=str,

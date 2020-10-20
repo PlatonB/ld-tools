@@ -1,4 +1,4 @@
-__version__ = 'V1.0'
+__version__ = 'V1.1'
 
 from argparse import ArgumentParser, RawTextHelpFormatter
 
@@ -36,19 +36,20 @@ CLI help legend:
         argparser.add_argument('-S', '--src-dir-path', metavar='str', dest='src_dir_path', type=str,
                                help='Path to folder with source tables')
         argparser.add_argument('-D', '--intgen-dir-path', metavar='str', dest='intgen_dir_path', type=str,
-                               help='Path to folder for 1000 Genomes data')
+                               help='Path to folder for 1000G data')
         argparser.add_argument('-t', '--trg-top-dir-path', metavar='[None]', dest='trg_top_dir_path', type=str,
                                help='Path to target folder (default: path to source folder)')
         argparser.add_argument('-m', '--meta-lines-quan', metavar='[0]', default=0, dest='meta_lines_quan', type=int,
                                help='Number of meta-information lines (including line with column names)')
         argparser.add_argument('-f', '--skip-intgen-data-ver', dest='skip_intgen_data_ver', action='store_true',
-                               help='Do not check 1000 Genomes data completeness (start main calculations immediately)')
+                               help='Do not check 1000G data completeness (start main calculations immediately)')
         argparser.add_argument('-g', '--gend-names', metavar='[both]', choices=['male', 'female', 'both'], default='both', dest='gend_names', type=str,
-                               help='{male, female, both} Belonging of 1000 Genomes samples to genders')
+                               help='{male, female, both} Belonging of 1000G samples to genders (for selection of genotypes that determine LD)')
         argparser.add_argument('-e', '--pop-names', metavar='[all]', default='all', dest='pop_names', type=str,
-                               help='Belonging of 1000 Genomes samples to populations (separated by commas without space; https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)')
+                               help='''Belonging of 1000G samples to populations (separated by commas without space; for selection of genotypes that determine LD;
+https://www.internationalgenome.org/faq/which-populations-are-part-your-study/)''')
         argparser.add_argument('-w', '--flank-size', metavar='[100000]', default=100000, dest='flank_size', type=int,
-                               help='The size of each of the flanks, where to look for in-LD variants')
+                               help='The size of *each* of the flanks, where to look for in-LD variants')
         argparser.add_argument('-l', '--ld-thres-measure', metavar='[r_square]', choices=['r_square', 'd_prime'], default='r_square', dest='ld_thres_measure', type=str,
                                help='{r_square, d_prime} Measure for setting the lower LD threshold')
         argparser.add_argument('-z', '--ld-low-thres', metavar='[0.8]', default=0.8, dest='ld_low_thres', type=float,
