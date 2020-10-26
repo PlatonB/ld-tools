@@ -83,6 +83,7 @@ python3 ld_triangle -h
 
 # _ld_lite_.
 Для работы лишь с двумя вариантами. Пара подаётся в качестве аргументов команды. Конечная таблица отображается здесь же, в [терминале](https://github.com/PlatonB/ngs-pipelines#преодолеваем-страх-командной-строки-linux). Дополняющий основные результаты набор аннотаций аналогичен тому, что выводит _ld_area_.
+
 ![Пример таблицы](https://raw.githubusercontent.com/PlatonB/ld-tools/master/gallery/ld_lite_tabular_output.png)
 
 # _ld_triangle_.
