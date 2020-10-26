@@ -1,4 +1,4 @@
-__version__ = 'V1.1'
+__version__ = 'V1.2'
 
 class NotRsIdError(Exception):
         '''
@@ -115,6 +115,7 @@ with VariantFile(os.path.join(intgen_dir_path,
                 if intgen_rec.id != args.rs_id_1:
                         continue
                 var_1_alleles = intgen_rec.ref + '/' + intgen_rec.alts[0]
+                var_1_type = intgen_rec.info['VT'][0]
                 for sample_name in sample_names:
                         try:
                                 var_1_genotypes += intgen_rec.samples[sample_name]['GT']
@@ -127,6 +128,7 @@ with VariantFile(os.path.join(intgen_dir_path,
                 if intgen_rec.id != args.rs_id_2:
                         continue
                 var_2_alleles = intgen_rec.ref + '/' + intgen_rec.alts[0]
+                var_2_type = intgen_rec.info['VT'][0]
                 for sample_name in sample_names:
                         try:
                                 var_2_genotypes += intgen_rec.samples[sample_name]['GT']
@@ -146,6 +148,7 @@ trg_vals = calc_ld(var_1_genotypes,
 print(tabulate([['chrom', chrom, chrom],
                 ['hg38_pos', var_1_pos, var_2_pos],
                 ['alleles', var_1_alleles, var_2_alleles],
+                ['type', var_1_type, var_2_type],
                 ['alt_freq', trg_vals['var_1_alt_freq'], trg_vals['var_2_alt_freq']]],
                headers=[tabulate([['r2', trg_vals['r_square']],
                                   ["D'", trg_vals['d_prime']],

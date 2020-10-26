@@ -1,4 +1,4 @@
-__version__ = 'V11.1'
+__version__ = 'V11.2'
 
 class PrepSingleProc():
         '''
@@ -151,11 +151,10 @@ class PrepSingleProc():
                                                 
                                                 #Вытаскивание из 1000 Genomes и отбор
                                                 #по сэмплам фазированных генотипов текущей
-                                                #пары вариантов. Разбиение фазированных
-                                                #генотипов на отдельные, что необходимо
-                                                #из-за требования калькулятора LD. Извлечение
-                                                #из 1000 Genomes референсного и альтернативного
-                                                #аллелей каждого варианта обрабатываемой пары.
+                                                #пары вариантов. Разбиение пар генотипов
+                                                #на отдельные, что необходимо из-за требования
+                                                #калькулятора LD. Извлечение из 1000 Genomes
+                                                #аннотаций каждого варианта обрабатываемой пары.
                                                 y_var_genotypes, x_var_genotypes = [], []
                                                 y_var_row = data_by_chrs[chrom][row_index]
                                                 for intgen_rec in intgen_vcf_opened.fetch(chrom,
@@ -164,6 +163,7 @@ class PrepSingleProc():
                                                         if intgen_rec.id != y_var_row[1]:
                                                                 continue
                                                         y_var_alleles = intgen_rec.ref + '/' + intgen_rec.alts[0]
+                                                        y_var_type = intgen_rec.info['VT'][0]
                                                         for sample_name in self.sample_names:
                                                                 try:
                                                                         y_var_genotypes += intgen_rec.samples[sample_name]['GT']
@@ -177,6 +177,7 @@ class PrepSingleProc():
                                                         if intgen_rec.id != x_var_row[1]:
                                                                 continue
                                                         x_var_alleles = intgen_rec.ref + '/' + intgen_rec.alts[0]
+                                                        x_var_type = intgen_rec.info['VT'][0]
                                                         for sample_name in self.sample_names:
                                                                 try:
                                                                         x_var_genotypes += intgen_rec.samples[sample_name]['GT']
@@ -205,6 +206,8 @@ abs_dist: {abs(poss_srtd[col_index] - poss_srtd[row_index])}<br><br>
 {rs_ids_srtd[row_index]}.hg38_pos: {poss_srtd[row_index]}<br><br>
 {rs_ids_srtd[col_index]}.alleles: {x_var_alleles}<br>
 {rs_ids_srtd[row_index]}.alleles: {y_var_alleles}<br><br>
+{rs_ids_srtd[col_index]}.type: {x_var_type}<br>
+{rs_ids_srtd[row_index]}.type: {y_var_type}<br><br>
 {rs_ids_srtd[col_index]}.alt_freq: {trg_vals['var_2_alt_freq']}<br>
 {rs_ids_srtd[row_index]}.alt_freq: {trg_vals['var_1_alt_freq']}
 '''
@@ -395,7 +398,7 @@ elif max_proc_quan > 8:
 else:
         proc_quan = max_proc_quan
         
-print(f'\nLD matrix(-es) creation')
+print('\nLD matrix(-es) creation')
 print(f'\tnumber of parallel processes: {proc_quan}')
 
 #Параллельный запуск создания матриц.
