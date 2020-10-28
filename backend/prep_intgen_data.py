@@ -1,6 +1,6 @@
-__version__ = 'V2.0'
+__version__ = 'V3.0'
 
-import os, urllib.request, sqlite3, re, time
+import os, urllib.request, sqlite3, re, time, copy
 from pysam import tabix_index, VariantFile
 
 def prep_intgen_data(intgen_dir_path):
@@ -27,7 +27,7 @@ def prep_intgen_data(intgen_dir_path):
         print('\nsamples.txt', end='... ')
         intgen_samptxt_path = os.path.join(intgen_dir_path, 'samples.txt')
         intgen_hg19page_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/'
-        if os.path.exists(intgen_samptxt_path) == False:
+        if not os.path.exists(intgen_samptxt_path):
                 intgen_samptxt_url = os.path.join(intgen_hg19page_url,
                                                   'integrated_call_samples_v3.20130502.ALL.panel')
                 urllib.request.urlretrieve(intgen_samptxt_url, intgen_samptxt_path)
@@ -80,7 +80,7 @@ def prep_intgen_data(intgen_dir_path):
         intgen_urlstxt_path = os.path.join(intgen_dir_path, 'urls.txt')
         intgen_hg38page_url = os.path.join(intgen_hg19page_url,
                                            'supporting/GRCh38_positions/')
-        if os.path.exists(intgen_urlstxt_path) == False:
+        if not os.path.exists(intgen_urlstxt_path):
                 with urllib.request.urlopen(intgen_hg38page_url) as response:
                         intgen_vcf_names = re.findall(r'ALL\.chr(?:\d{1,2}|X|Y)_GRCh38\.genotypes\.\S+?\.vcf\.gz(?=\r\n)',
                                                       response.read().decode('UTF-8'))
@@ -120,7 +120,7 @@ def prep_intgen_data(intgen_dir_path):
                         print(f'\n{chr_name}.vcf.gz', end='... ')
                         intgen_vcf_path = os.path.join(intgen_dir_path,
                                                        f'{chr_name}.vcf.gz')
-                        if os.path.exists(intgen_vcf_path) == False:
+                        if not os.path.exists(intgen_vcf_path):
                                 while True:
                                         try:
                                                 urllib.request.urlretrieve(intgen_vcf_url,
@@ -133,11 +133,15 @@ def prep_intgen_data(intgen_dir_path):
                                                 print(f'{chr_name}.vcf.gz', end='... ')
                         print('OK')
                         print(f'{chr_name}.vcf.gz.tbi', end='... ')
-                        if os.path.exists(intgen_vcf_path + '.tbi') == False:
-                                tabix_index(intgen_vcf_path, preset='vcf')
+                        if not os.path.exists(f'{intgen_vcf_path}.tbi'):
+                                try:
+                                        tabix_index(intgen_vcf_path, preset='vcf')
+                                except OSError:
+                                        urllib.request.urlretrieve(f'{intgen_vcf_url}.tbi',
+                                                                   f'{intgen_vcf_path}.tbi')
                         print('OK')
                         
-                        #Создание таблицы соответствия.
+                        #Создание CHROM-POS-ID-таблицы соответствия.
                         print('variants', end='... ')
                         cursor.execute('CREATE TABLE IF NOT EXISTS variants (CHROM TEXT, POS INTEGER, ID TEXT)')
                         cursor.execute(f'SELECT * FROM variants WHERE CHROM = "{chr_name}"')
@@ -145,33 +149,31 @@ def prep_intgen_data(intgen_dir_path):
                                 print('OK')
                                 continue
                         
-                        #Пополнение таблицы соответствия фрагментами по 100000
-                        #строк. Варианты с не-rs-идентификаторами, а также
-                        #мультиаллельные варианты в эту таблицу не пойдут, т.к.
-                        #для них невозможно или крайне затруднительно считать
-                        #LD. Особо коварная разновидность мультиаллельных
+                        #Пополнение таблицы соответствия. Производить его
+                        #пофрагментно не имеет смысла: каждый заливаемый
+                        #набор данных весит не более 150 МБ и легко умещается
+                        #в RAM. Варианты с не-rs-идентификаторами, а также
+                        #мультиаллельные варианты в эту таблицу не пойдут,
+                        #т.к. для них невозможно или крайне затруднительно
+                        #считать LD. Особо коварная разновидность мультиаллельных
                         #вариантов - повторы с разным количеством звеньев.
                         #В 1000 Genomes они оформлены как наборы биаллельных
                         #вариантов. В пределах каждого из наборов - один и тот
-                        #же rsID. Программа их распознаёт и тоже выбрасывает.
+                        #же rsID. Программа их распознаёт и в базу не пускает.
                         with VariantFile(intgen_vcf_path) as intgen_vcf_opened:
-                                fragment, rs_ids, fragment_len, max_fragment_len = [], set(), 0, 100000
+                                intgen_two_dim, prev_chrom_pos_id = [], None
                                 for rec in intgen_vcf_opened.fetch():
                                         if re.match(r'rs\d+$', rec.id) is None \
                                            or 'MULTI_ALLELIC' in rec.info:
                                                 continue
-                                        if rec.id in rs_ids:
-                                                continue
-                                        fragment.append([rec.chrom, rec.pos, rec.id])
-                                        rs_ids.add(rec.id)
-                                        fragment_len += 1
-                                        if fragment_len == max_fragment_len:
-                                                cursor.executemany('INSERT INTO variants VALUES (?, ?, ?)', fragment)
-                                                fragment.clear()
-                                                rs_ids.clear()
-                                                fragment_len = 0
-                        if fragment_len > 0:
-                                cursor.executemany('INSERT INTO variants VALUES (?, ?, ?)', fragment)
+                                        chrom_pos_id = [rec.chrom, rec.pos, rec.id]
+                                        if chrom_pos_id != prev_chrom_pos_id:
+                                                intgen_two_dim.append(chrom_pos_id)
+                                                prev_chrom_pos_id = copy.deepcopy(chrom_pos_id)
+                                        elif intgen_two_dim != []:
+                                                if intgen_two_dim[-1] == chrom_pos_id:
+                                                        del intgen_two_dim[-1]
+                        cursor.executemany('INSERT INTO variants VALUES (?, ?, ?)', intgen_two_dim)
                         conn.commit()
                         print('OK')
                         
