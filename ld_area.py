@@ -1,4 +1,4 @@
-__version__ = 'V11.1'
+__version__ = 'V11.2'
 
 def build_ucsc_header(header_key, header_val):
         '''
@@ -293,7 +293,7 @@ class PrepSingleProc():
                                                 
 ####################################################################################################
 
-import sys, locale, os, re, json
+import sys, locale, os, datetime, re, json
 
 #Подавление формирования питоновского кэша с
 #целью предотвращения искажения результатов.
@@ -331,7 +331,12 @@ else:
 print(f'\nSelecting variants in LD and in window')
 print(f'\tnumber of parallel processes: {proc_quan}')
 
-#Параллельный запуск создания коллекций.
+#Параллельный запуск поиска in-LD вариантов. Замер
+#времени выполнения этого кода с точностью до микросекунды.
 with Pool(proc_quan) as pool_obj:
+        exec_time_start = datetime.datetime.now()
         pool_obj.map(prep_single_proc.get_inld_vars,
                      src_file_names)
+        exec_time = datetime.datetime.now() - exec_time_start
+        
+print(f'\tparallel computation time: {exec_time}')

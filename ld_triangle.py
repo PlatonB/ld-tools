@@ -1,4 +1,4 @@
-__version__ = 'V11.2'
+__version__ = 'V11.3'
 
 class PrepSingleProc():
         '''
@@ -361,7 +361,7 @@ readme:
                                                 
 ####################################################################################################
 
-import sys, locale, os, copy
+import sys, locale, os, datetime, copy
 
 #Подавление формирования питоновского кэша с
 #целью предотвращения искажения результатов.
@@ -401,6 +401,11 @@ else:
 print('\nLD matrix(-es) creation')
 print(f'\tnumber of parallel processes: {proc_quan}')
 
-#Параллельный запуск создания матриц.
+#Параллельный запуск создания матриц. Замер времени
+#выполнения этого кода с точностью до микросекунды.
 with Pool(proc_quan) as pool_obj:
+        exec_time_start = datetime.datetime.now()
         pool_obj.map(prep_single_proc.create_matrix, src_file_names)
+        exec_time = datetime.datetime.now() - exec_time_start
+        
+print(f'\tparallel computation time: {exec_time}')
