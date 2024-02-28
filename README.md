@@ -1,3 +1,5 @@
+# The project is frozen(.
+**At the moment _ld-tools_ is not working. Main reason: _1000 Genomes_ project deleted [VCFs containing rsIDs](http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/supporting/GRCh38_positions/). Secondary reason: Plotly visualization library heatmap functionality has been [fundamentally changed](https://plotly.com/python/annotated-heatmap/). To bring _ld-tools_ back to life requires an almost complete code rewrite. I don't have the time, energy or funding for that right now. Let this repository remain published: maybe I will return to development or someone will make a fork.**
 # [Readme in English→](https://github.com/PlatonB/ld-tools/blob/master/README-EN.md)
 # Синопсис.
 ## Компоненты.
